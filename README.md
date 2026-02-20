@@ -45,6 +45,21 @@
 
 > 本项目以轻量，易部署为目标
 
+## About
+
+TrendRadar-custom 是一个面向部署与定制化场景的 TrendRadar Fork，主要用于维护 `trendradar.xiduan.xyz` 的配置与报告体验改造。
+
+## Fork 说明
+
+- 原始仓库: [maximdx/TrendRadar](https://github.com/maximdx/TrendRadar)
+- 原始 README: [README.md](https://github.com/maximdx/TrendRadar/blob/master/README.md)
+
+## 本 Fork 目的
+
+本 Fork 聚焦于部署实践、配置优化和报告渲染增强。详细变更记录请参考：
+
+- [CUSTOMIZATION_CHANGELOG.md](./CUSTOMIZATION_CHANGELOG.md)
+
 <br>
 
 ## 📑 快速导航
