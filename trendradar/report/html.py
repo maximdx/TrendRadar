@@ -5,6 +5,7 @@ HTML 报告渲染模块
 提供 HTML 格式的热点新闻报告生成功能
 """
 
+import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Callable
 
@@ -51,6 +52,169 @@ def render_html_content(
     default_region_order = ["hotlist", "rss", "new_items", "standalone", "ai_analysis"]
     if region_order is None:
         region_order = default_region_order
+
+    def get_env_bool(name: str, default: bool) -> bool:
+        raw = os.getenv(name)
+        if raw is None:
+            return default
+        return raw.strip().lower() in {"1", "true", "yes", "on", "y"}
+
+    # 默认隐藏“观察窗口时间”和“出现次数”，可通过环境变量开启显示模式
+    time_mode_raw = os.getenv("HTML_TIME_DISPLAY_MODE", "hidden").strip().lower()
+    time_mode_aliases = {
+        "observation": "observed",
+        "observe": "observed",
+        "published": "publish",
+        "none": "hidden",
+        "off": "hidden",
+        "false": "hidden",
+        "0": "hidden",
+    }
+    time_mode = time_mode_aliases.get(time_mode_raw, time_mode_raw)
+    if time_mode not in {"observed", "publish", "publish_or_observed", "hidden"}:
+        time_mode = "hidden"
+
+    # 是否显示“出现次数”，对 publish/hidden 模式默认关闭
+    show_observation_count = get_env_bool(
+        "HTML_SHOW_OBSERVATION_COUNT",
+        time_mode in {"observed", "publish_or_observed"},
+    )
+
+    def simplify_observed_time(time_display: str) -> str:
+        if not time_display:
+            return ""
+        return (
+            time_display.replace(" ~ ", "~")
+            .replace("[", "")
+            .replace("]", "")
+        )
+
+    def format_datetime_like(value: Any) -> str:
+        if value is None:
+            return ""
+
+        # unix 时间戳（秒 / 毫秒）
+        if isinstance(value, (int, float)):
+            ts = float(value)
+            if ts > 10_000_000_000:
+                ts /= 1000.0
+            try:
+                return datetime.fromtimestamp(ts).strftime("%m-%d %H:%M")
+            except (ValueError, OSError, OverflowError):
+                return ""
+
+        if not isinstance(value, str):
+            return ""
+
+        raw = value.strip()
+        if not raw:
+            return ""
+
+        if raw.isdigit():
+            try:
+                ts = float(raw)
+                if ts > 10_000_000_000:
+                    ts /= 1000.0
+                return datetime.fromtimestamp(ts).strftime("%m-%d %H:%M")
+            except (ValueError, OSError, OverflowError):
+                pass
+
+        iso_candidates = [raw, raw.replace("Z", "+00:00")]
+        for candidate in iso_candidates:
+            try:
+                dt = datetime.fromisoformat(candidate)
+                return dt.strftime("%m-%d %H:%M")
+            except ValueError:
+                continue
+
+        known_formats = [
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+            "%Y/%m/%d %H:%M:%S",
+            "%Y/%m/%d %H:%M",
+            "%Y-%m-%d",
+            "%Y/%m/%d",
+            "%m-%d %H:%M",
+            "%H:%M",
+        ]
+        for fmt in known_formats:
+            try:
+                dt = datetime.strptime(raw, fmt)
+                if fmt == "%H:%M":
+                    return raw
+                if fmt in {"%m-%d %H:%M"}:
+                    return dt.strftime("%m-%d %H:%M")
+                return dt.strftime("%m-%d %H:%M")
+            except ValueError:
+                continue
+
+        # 兜底：原样返回，避免丢失可读时间
+        return raw
+
+    def extract_publish_time_display(item: Dict[str, Any]) -> str:
+        if not isinstance(item, dict):
+            return ""
+
+        sources: List[Dict[str, Any]] = [item]
+        extra = item.get("extra")
+        if isinstance(extra, dict):
+            sources.append(extra)
+
+        candidate_keys = [
+            "published_at",
+            "publishedAt",
+            "published_time",
+            "publish_time",
+            "pubDate",
+            "pub_date",
+            "date",
+            "datetime",
+            "created_at",
+            "createdAt",
+        ]
+
+        for source in sources:
+            for key in candidate_keys:
+                if key not in source:
+                    continue
+                formatted = format_datetime_like(source.get(key))
+                if formatted:
+                    return formatted
+
+        return ""
+
+    def resolve_hotlist_time_display(item: Dict[str, Any]) -> str:
+        observed_display = simplify_observed_time(item.get("time_display", ""))
+        publish_display = extract_publish_time_display(item)
+
+        if time_mode == "hidden":
+            return ""
+        if time_mode == "publish":
+            return publish_display
+        if time_mode == "publish_or_observed":
+            return publish_display or observed_display
+        return observed_display
+
+    def resolve_standalone_time_display(item: Dict[str, Any]) -> str:
+        publish_display = extract_publish_time_display(item)
+
+        first_time = item.get("first_time", "")
+        last_time = item.get("last_time", "")
+        observed_display = ""
+        if first_time and last_time and first_time != last_time:
+            first_time_display = convert_time_for_display(first_time)
+            last_time_display = convert_time_for_display(last_time)
+            observed_display = f"{first_time_display}~{last_time_display}"
+        elif first_time:
+            observed_display = convert_time_for_display(first_time)
+
+        if time_mode == "hidden":
+            return ""
+        if time_mode == "publish":
+            return publish_display
+        if time_mode == "publish_or_observed":
+            return publish_display or observed_display
+        return observed_display
 
     html = """
     <!DOCTYPE html>
@@ -159,6 +323,129 @@ def render_html_content(
                 padding: 24px;
             }
 
+            .outline-panel {
+                position: relative;
+                z-index: 5;
+                margin-bottom: 20px;
+                padding: 12px;
+                border: 1px solid #e5e7eb;
+                border-radius: 10px;
+                background: #ffffff;
+                box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+            }
+
+            .outline-panel.is-floating-side {
+                position: fixed;
+                top: 16px;
+                z-index: 30;
+                margin-bottom: 0;
+                max-height: calc(100vh - 24px);
+                display: flex;
+                flex-direction: column;
+            }
+
+            .outline-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                margin-bottom: 8px;
+            }
+
+            .outline-title {
+                font-size: 13px;
+                font-weight: 600;
+                color: #4b5563;
+            }
+
+            .outline-actions {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+
+            .outline-action-btn {
+                border: 1px solid #d1d5db;
+                background: #f9fafb;
+                color: #4b5563;
+                font-size: 12px;
+                border-radius: 6px;
+                padding: 4px 8px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+            }
+
+            .outline-action-btn:hover {
+                background: #f3f4f6;
+                border-color: #9ca3af;
+            }
+
+            .outline-links {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                max-height: 180px;
+                overflow-y: auto;
+                padding-right: 4px;
+            }
+
+            .outline-panel.is-floating-side .outline-links {
+                flex: 1;
+                flex-direction: column;
+                flex-wrap: nowrap;
+                gap: 6px;
+                max-height: none;
+                padding-right: 2px;
+                min-height: 0;
+            }
+
+            .outline-link {
+                display: inline-flex;
+                align-items: center;
+                padding: 4px 8px;
+                border-radius: 999px;
+                border: 1px solid #e5e7eb;
+                background: #f8fafc;
+                color: #475569;
+                text-decoration: none;
+                font-size: 12px;
+                line-height: 1.4;
+                transition: all 0.2s ease;
+            }
+
+            .outline-panel.is-floating-side .outline-link {
+                display: block;
+                border-radius: 8px;
+                padding: 6px 8px;
+            }
+
+            .outline-link:hover {
+                background: #eef2ff;
+                border-color: #c7d2fe;
+                color: #4338ca;
+            }
+
+            .outline-link.level-2 {
+                font-size: 11px;
+                padding: 4px 7px;
+            }
+
+            .outline-panel.is-floating-side .outline-link.level-2 {
+                margin-left: 8px;
+                font-size: 11px;
+            }
+
+            .outline-link.active {
+                background: #dbeafe;
+                border-color: #93c5fd;
+                color: #1d4ed8;
+                font-weight: 600;
+            }
+
+            [data-outline-title] {
+                scroll-margin-top: 80px;
+            }
+
             .word-group {
                 margin-bottom: 40px;
             }
@@ -174,6 +461,43 @@ def render_html_content(
                 margin-bottom: 20px;
                 padding-bottom: 8px;
                 border-bottom: 1px solid #f0f0f0;
+            }
+
+            .fold-header {
+                cursor: pointer;
+                user-select: none;
+            }
+
+            .fold-header:focus-visible {
+                outline: 2px solid #93c5fd;
+                outline-offset: 2px;
+                border-radius: 6px;
+            }
+
+            .word-header-right {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .fold-toggle {
+                color: #9ca3af;
+                font-size: 13px;
+                line-height: 1;
+                min-width: 12px;
+                text-align: center;
+            }
+
+            .foldable-section.is-collapsed .word-header {
+                margin-bottom: 0;
+            }
+
+            .foldable-section.is-collapsed {
+                margin-bottom: 20px;
+            }
+
+            .foldable-section.is-collapsed > .fold-body {
+                display: none;
             }
 
             .word-info {
@@ -304,6 +628,29 @@ def render_html_content(
                 color: #059669;
                 font-size: 11px;
                 font-weight: 500;
+            }
+
+            .trend-info {
+                font-size: 11px;
+                font-weight: 600;
+                padding: 2px 6px;
+                border-radius: 10px;
+                line-height: 1;
+            }
+
+            .trend-info.up {
+                color: #065f46;
+                background: #d1fae5;
+            }
+
+            .trend-info.down {
+                color: #9a3412;
+                background: #ffedd5;
+            }
+
+            .trend-info.flat {
+                color: #374151;
+                background: #f3f4f6;
             }
 
             .news-title {
@@ -482,6 +829,27 @@ def render_html_content(
                 .header { padding: 24px 20px; }
                 .content { padding: 20px; }
                 .footer { padding: 16px 20px; }
+                .outline-panel,
+                .outline-panel.is-floating-side {
+                    position: relative;
+                    top: auto;
+                    left: auto !important;
+                    width: auto !important;
+                    max-height: none;
+                    display: block;
+                }
+                .outline-header {
+                    flex-direction: column;
+                    align-items: flex-start;
+                }
+                .outline-links {
+                    max-height: 140px;
+                }
+                .outline-panel.is-floating-side .outline-links {
+                    flex-direction: row;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                }
                 .header-info { grid-template-columns: 1fr; gap: 12px; }
                 .news-header { gap: 6px; }
                 .news-content { padding-right: 45px; }
@@ -792,7 +1160,17 @@ def render_html_content(
                 </div>
             </div>
 
-            <div class="content">"""
+            <div class="content">
+                <div class="outline-panel" id="outline-panel">
+                    <div class="outline-header">
+                        <div class="outline-title">快速导航</div>
+                        <div class="outline-actions">
+                            <button type="button" class="outline-action-btn" id="collapse-all-btn">折叠词组</button>
+                            <button type="button" class="outline-action-btn" id="expand-all-btn">展开词组</button>
+                        </div>
+                    </div>
+                    <div class="outline-links" id="outline-links"></div>
+                </div>"""
 
     # 处理失败ID错误信息
     if report_data["failed_ids"]:
@@ -805,6 +1183,53 @@ def render_html_content(
         html += """
                     </ul>
                 </div>"""
+
+    def build_trend_info_html(rank_timeline: List[Dict[str, Any]], ranks: List[int]) -> str:
+        """基于最近两次有效排名渲染趋势标签（↑上升 / ↓下降 / →持平）"""
+        prev_rank: Optional[int] = None
+        curr_rank: Optional[int] = None
+
+        # 优先使用完整时间线，避免 ranks(去重列表)丢失方向信息
+        valid_timeline_ranks: List[int] = []
+        if rank_timeline:
+            for point in rank_timeline:
+                if not isinstance(point, dict):
+                    continue
+                rank = point.get("rank")
+                if rank is None:
+                    continue
+                try:
+                    valid_timeline_ranks.append(int(rank))
+                except (TypeError, ValueError):
+                    continue
+
+        if len(valid_timeline_ranks) >= 2:
+            prev_rank = valid_timeline_ranks[-2]
+            curr_rank = valid_timeline_ranks[-1]
+        elif len(ranks) >= 2:
+            try:
+                prev_rank = int(ranks[-2])
+                curr_rank = int(ranks[-1])
+            except (TypeError, ValueError):
+                return ""
+        else:
+            return ""
+
+        if prev_rank is None or curr_rank is None:
+            return ""
+
+        if curr_rank < prev_rank:
+            trend_class = "up"
+            trend_text = "↑上升"
+        elif curr_rank > prev_rank:
+            trend_class = "down"
+            trend_text = "↓下降"
+        else:
+            trend_class = "flat"
+            trend_text = "→持平"
+
+        title = html_escape(f"上次 #{prev_rank} -> 本次 #{curr_rank}")
+        return f'<span class="trend-info {trend_class}" title="{title}">{trend_text}</span>'
 
     # 生成热点词汇统计部分的HTML
     stats_html = ""
@@ -825,14 +1250,18 @@ def render_html_content(
             escaped_word = html_escape(stat["word"])
 
             stats_html += f"""
-                <div class="word-group">
-                    <div class="word-header">
+                <div class="word-group foldable-section" id="word-group-{i}" data-outline-title="{escaped_word}" data-outline-level="2" data-foldable="true">
+                    <div class="word-header fold-header" data-fold-header role="button" tabindex="0" aria-expanded="true">
                         <div class="word-info">
                             <div class="word-name">{escaped_word}</div>
                             <div class="word-count {count_class}">{count} 条</div>
                         </div>
-                        <div class="word-index">{i}/{total_count}</div>
-                    </div>"""
+                        <div class="word-header-right">
+                            <div class="word-index">{i}/{total_count}</div>
+                            <span class="fold-toggle" aria-hidden="true">▾</span>
+                        </div>
+                    </div>
+                    <div class="fold-body" data-fold-body>"""
 
             # 处理每个词组下的新闻标题，给每条新闻标上序号
             for j, title_data in enumerate(stat["titles"], 1):
@@ -877,22 +1306,22 @@ def render_html_content(
 
                     stats_html += f'<span class="rank-num {rank_class}">{rank_text}</span>'
 
-                # 处理时间显示
-                time_display = title_data.get("time_display", "")
-                if time_display:
-                    # 简化时间显示格式，将波浪线替换为~
-                    simplified_time = (
-                        time_display.replace(" ~ ", "~")
-                        .replace("[", "")
-                        .replace("]", "")
-                    )
+                # 趋势显示（基于最近两次有效排名）
+                rank_timeline = title_data.get("rank_timeline", [])
+                trend_info_html = build_trend_info_html(rank_timeline, ranks)
+                if trend_info_html:
+                    stats_html += trend_info_html
+
+                # 处理时间显示（可配置：observed/publish/publish_or_observed/hidden）
+                resolved_time_display = resolve_hotlist_time_display(title_data)
+                if resolved_time_display:
                     stats_html += (
-                        f'<span class="time-info">{html_escape(simplified_time)}</span>'
+                        f'<span class="time-info">{html_escape(resolved_time_display)}</span>'
                     )
 
                 # 处理出现次数
                 count_info = title_data.get("count", 1)
-                if count_info > 1:
+                if show_observation_count and count_info > 1:
                     stats_html += f'<span class="count-info">{count_info}次</span>'
 
                 stats_html += """
@@ -915,19 +1344,20 @@ def render_html_content(
                     </div>"""
 
             stats_html += """
+                    </div>
                 </div>"""
 
     # 给热榜统计添加外层包装
     if stats_html:
         stats_html = f"""
-                <div class="hotlist-section">{stats_html}
+                <div class="hotlist-section" id="section-hotlist" data-outline-title="热点词汇" data-outline-level="1">{stats_html}
                 </div>"""
 
     # 生成新增新闻区域的HTML
     new_titles_html = ""
     if show_new_section and report_data["new_titles"]:
         new_titles_html += f"""
-                <div class="new-section">
+                <div class="new-section" id="section-new-hotlist" data-outline-title="本次新增热点" data-outline-level="1">
                     <div class="new-section-title">本次新增热点 (共 {report_data['total_new_count']} 条)</div>"""
 
         for source_data in report_data["new_titles"]:
@@ -987,7 +1417,12 @@ def render_html_content(
                 </div>"""
 
     # 生成 RSS 统计内容
-    def render_rss_stats_html(stats: List[Dict], title: str = "RSS 订阅更新") -> str:
+    def render_rss_stats_html(
+        stats: List[Dict],
+        title: str = "RSS 订阅更新",
+        section_id: str = "section-rss",
+        outline_title: Optional[str] = None,
+    ) -> str:
         """渲染 RSS 统计区块 HTML
 
         Args:
@@ -1020,8 +1455,9 @@ def render_html_content(
         if total_count == 0:
             return ""
 
+        escaped_outline_title = html_escape(outline_title or title)
         rss_html = f"""
-                <div class="rss-section">
+                <div class="rss-section" id="{section_id}" data-outline-title="{escaped_outline_title}" data-outline-level="1">
                     <div class="rss-section-header">
                         <div class="rss-section-title">{title}</div>
                         <div class="rss-section-count">{total_count} 条</div>
@@ -1146,7 +1582,7 @@ def render_html_content(
             return ""
 
         standalone_html = f"""
-                <div class="standalone-section">
+                <div class="standalone-section" id="section-standalone" data-outline-title="独立展示区" data-outline-level="1">
                     <div class="standalone-section-header">
                         <div class="standalone-section-title">独立展示区</div>
                         <div class="standalone-section-count">{total_count} 条</div>
@@ -1172,8 +1608,7 @@ def render_html_content(
                 url = item.get("url", "") or item.get("mobileUrl", "")
                 rank = item.get("rank", 0)
                 ranks = item.get("ranks", [])
-                first_time = item.get("first_time", "")
-                last_time = item.get("last_time", "")
+                rank_timeline = item.get("rank_timeline", [])
                 count = item.get("count", 1)
 
                 standalone_html += f"""
@@ -1210,17 +1645,18 @@ def render_html_content(
                         rank_class = ""
                     standalone_html += f'<span class="rank-num {rank_class}">{rank}</span>'
 
-                # 时间显示（复用 time-info 样式，将 HH-MM 转换为 HH:MM）
-                if first_time and last_time and first_time != last_time:
-                    first_time_display = convert_time_for_display(first_time)
-                    last_time_display = convert_time_for_display(last_time)
-                    standalone_html += f'<span class="time-info">{html_escape(first_time_display)}~{html_escape(last_time_display)}</span>'
-                elif first_time:
-                    first_time_display = convert_time_for_display(first_time)
-                    standalone_html += f'<span class="time-info">{html_escape(first_time_display)}</span>'
+                # 趋势显示（基于最近两次有效排名）
+                trend_info_html = build_trend_info_html(rank_timeline, ranks)
+                if trend_info_html:
+                    standalone_html += trend_info_html
+
+                # 时间显示（支持 publish / observed 配置）
+                standalone_time_display = resolve_standalone_time_display(item)
+                if standalone_time_display:
+                    standalone_html += f'<span class="time-info">{html_escape(standalone_time_display)}</span>'
 
                 # 出现次数（复用 count-info 样式）
-                if count > 1:
+                if show_observation_count and count > 1:
                     standalone_html += f'<span class="count-info">{count}次</span>'
 
                 standalone_html += """
@@ -1311,14 +1747,37 @@ def render_html_content(
         return standalone_html
 
     # 生成 RSS 统计和新增 HTML
-    rss_stats_html = render_rss_stats_html(rss_items, "RSS 订阅更新") if rss_items else ""
-    rss_new_html = render_rss_stats_html(rss_new_items, "RSS 新增更新") if rss_new_items else ""
+    rss_stats_html = (
+        render_rss_stats_html(
+            rss_items,
+            "RSS 订阅更新",
+            "section-rss-updates",
+            "RSS 订阅更新",
+        )
+        if rss_items
+        else ""
+    )
+    rss_new_html = (
+        render_rss_stats_html(
+            rss_new_items,
+            "RSS 新增更新",
+            "section-rss-new-updates",
+            "RSS 新增更新",
+        )
+        if rss_new_items
+        else ""
+    )
 
     # 生成独立展示区 HTML
     standalone_html = render_standalone_html(standalone_data)
 
     # 生成 AI 分析 HTML
     ai_html = render_ai_analysis_html_rich(ai_analysis) if ai_analysis else ""
+    if ai_html:
+        ai_html = f"""
+                <div class="ai-section-wrapper" id="section-ai-analysis" data-outline-title="AI 分析" data-outline-level="1">
+                    {ai_html}
+                </div>"""
 
     # 准备各区域内容映射
     region_contents = {
@@ -1385,9 +1844,182 @@ def render_html_content(
         </div>
 
         <script>
+            let foldableSections = [];
+            let outlineObserver = null;
+
+            function setSectionCollapsed(section, collapsed) {
+                if (!section) return;
+                const header = section.querySelector('[data-fold-header]');
+                const body = section.querySelector('[data-fold-body]');
+                if (!header || !body) return;
+                const toggleIcon = header.querySelector('.fold-toggle');
+
+                section.classList.toggle('is-collapsed', collapsed);
+                header.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                body.setAttribute('aria-hidden', collapsed ? 'true' : 'false');
+                if (toggleIcon) {
+                    toggleIcon.textContent = collapsed ? '▸' : '▾';
+                }
+            }
+
+            function initFoldableSections() {
+                foldableSections = Array.from(document.querySelectorAll('[data-foldable="true"]'))
+                    .filter(section => section.querySelector('[data-fold-header]') && section.querySelector('[data-fold-body]'));
+
+                foldableSections.forEach(section => {
+                    const header = section.querySelector('[data-fold-header]');
+                    const toggleFold = event => {
+                        if (event.type === 'keydown' && event.key !== 'Enter' && event.key !== ' ') {
+                            return;
+                        }
+                        if (event.type === 'keydown') {
+                            event.preventDefault();
+                        }
+                        const targetElement = event.target instanceof Element
+                            ? event.target
+                            : event.target && event.target.parentElement
+                                ? event.target.parentElement
+                                : null;
+                        if (targetElement && targetElement.closest('a')) {
+                            return;
+                        }
+                        setSectionCollapsed(section, !section.classList.contains('is-collapsed'));
+                    };
+
+                    header.addEventListener('click', toggleFold);
+                    header.addEventListener('keydown', toggleFold);
+                    setSectionCollapsed(section, section.dataset.foldDefault === 'collapsed');
+                });
+            }
+
+            function setAllFoldState(collapsed) {
+                foldableSections.forEach(section => setSectionCollapsed(section, collapsed));
+            }
+
+            function getFoldStateSnapshot() {
+                return foldableSections.map(section => section.classList.contains('is-collapsed'));
+            }
+
+            function restoreFoldStateSnapshot(snapshot) {
+                if (!Array.isArray(snapshot)) return;
+                foldableSections.forEach((section, index) => {
+                    if (index < snapshot.length) {
+                        setSectionCollapsed(section, snapshot[index]);
+                    }
+                });
+            }
+
+            function setupOutlineActiveState(sections) {
+                const links = Array.from(document.querySelectorAll('.outline-link'));
+                const linksById = new Map(links.map(link => [link.dataset.targetId, link]));
+
+                const setActive = targetId => {
+                    links.forEach(link => {
+                        link.classList.toggle('active', link.dataset.targetId === targetId);
+                    });
+                };
+
+                if (!sections.length) return;
+                setActive(sections[0].id);
+
+                if (outlineObserver) {
+                    outlineObserver.disconnect();
+                }
+
+                outlineObserver = new IntersectionObserver(entries => {
+                    const visibleEntries = entries
+                        .filter(entry => entry.isIntersecting)
+                        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+
+                    if (!visibleEntries.length) return;
+                    const activeId = visibleEntries[0].target.id;
+                    if (linksById.has(activeId)) {
+                        setActive(activeId);
+                    }
+                }, {
+                    root: null,
+                    threshold: [0.2, 0.6],
+                    rootMargin: '-80px 0px -60% 0px',
+                });
+
+                sections.forEach(section => outlineObserver.observe(section));
+            }
+
+            function buildOutline() {
+                const outlinePanel = document.getElementById('outline-panel');
+                const outlineLinks = document.getElementById('outline-links');
+                if (!outlinePanel || !outlineLinks) return;
+
+                const sections = Array.from(document.querySelectorAll('[data-outline-title][id]'));
+                if (!sections.length) {
+                    outlinePanel.style.display = 'none';
+                    return;
+                }
+
+                outlineLinks.innerHTML = '';
+                sections.forEach(section => {
+                    const link = document.createElement('a');
+                    const level = section.dataset.outlineLevel || '1';
+                    link.href = `#${section.id}`;
+                    link.className = `outline-link level-${level}`;
+                    link.dataset.targetId = section.id;
+                    link.textContent = section.dataset.outlineTitle || section.id;
+                    link.addEventListener('click', event => {
+                        event.preventDefault();
+                        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    });
+                    outlineLinks.appendChild(link);
+                });
+
+                setupOutlineActiveState(sections);
+            }
+
+            function updateOutlinePanelLayout() {
+                const outlinePanel = document.getElementById('outline-panel');
+                const container = document.querySelector('.container');
+                if (!outlinePanel || !container) return;
+
+                const containerRect = container.getBoundingClientRect();
+                const gap = 16;
+                const left = containerRect.right + gap;
+                const availableWidth = window.innerWidth - left - 12;
+                const shouldFloatSide = window.innerWidth >= 1120 && availableWidth >= 180;
+
+                if (shouldFloatSide) {
+                    outlinePanel.classList.add('is-floating-side');
+                    outlinePanel.style.left = `${left}px`;
+                    outlinePanel.style.width = `${Math.min(260, availableWidth)}px`;
+                } else {
+                    outlinePanel.classList.remove('is-floating-side');
+                    outlinePanel.style.left = '';
+                    outlinePanel.style.width = '';
+                }
+            }
+
+            function bindOutlineActions() {
+                const collapseBtn = document.getElementById('collapse-all-btn');
+                const expandBtn = document.getElementById('expand-all-btn');
+                const actions = document.querySelector('.outline-actions');
+                const hasFoldableSections = foldableSections.length > 0;
+
+                if (!hasFoldableSections && actions) {
+                    actions.style.display = 'none';
+                    return;
+                }
+
+                if (collapseBtn) {
+                    collapseBtn.addEventListener('click', () => setAllFoldState(true));
+                }
+                if (expandBtn) {
+                    expandBtn.addEventListener('click', () => setAllFoldState(false));
+                }
+            }
+
             async function saveAsImage() {
                 const button = event.target;
                 const originalText = button.textContent;
+                const foldStateSnapshot = getFoldStateSnapshot();
+                setAllFoldState(false);
 
                 try {
                     button.textContent = '生成中...';
@@ -1399,7 +2031,11 @@ def render_html_content(
 
                     // 截图前隐藏按钮
                     const buttons = document.querySelector('.save-buttons');
+                    const outlinePanel = document.querySelector('.outline-panel');
                     buttons.style.visibility = 'hidden';
+                    if (outlinePanel) {
+                        outlinePanel.style.visibility = 'hidden';
+                    }
 
                     // 再次等待确保按钮完全隐藏
                     await new Promise(resolve => setTimeout(resolve, 100));
@@ -1426,6 +2062,9 @@ def render_html_content(
                     });
 
                     buttons.style.visibility = 'visible';
+                    if (outlinePanel) {
+                        outlinePanel.style.visibility = 'visible';
+                    }
 
                     const link = document.createElement('a');
                     const now = new Date();
@@ -1448,11 +2087,17 @@ def render_html_content(
                 } catch (error) {
                     const buttons = document.querySelector('.save-buttons');
                     buttons.style.visibility = 'visible';
+                    const outlinePanel = document.querySelector('.outline-panel');
+                    if (outlinePanel) {
+                        outlinePanel.style.visibility = 'visible';
+                    }
                     button.textContent = '保存失败';
                     setTimeout(() => {
                         button.textContent = originalText;
                         button.disabled = false;
                     }, 2000);
+                } finally {
+                    restoreFoldStateSnapshot(foldStateSnapshot);
                 }
             }
 
@@ -1462,6 +2107,8 @@ def render_html_content(
                 const container = document.querySelector('.container');
                 const scale = 1.5;
                 const maxHeight = 5000 / scale;
+                const foldStateSnapshot = getFoldStateSnapshot();
+                setAllFoldState(false);
 
                 try {
                     button.textContent = '分析中...';
@@ -1594,7 +2241,11 @@ def render_html_content(
 
                     // 隐藏保存按钮
                     const buttons = document.querySelector('.save-buttons');
+                    const outlinePanel = document.querySelector('.outline-panel');
                     buttons.style.visibility = 'hidden';
+                    if (outlinePanel) {
+                        outlinePanel.style.visibility = 'hidden';
+                    }
 
                     // 为每个分段生成图片
                     const images = [];
@@ -1620,6 +2271,10 @@ def render_html_content(
                         const clonedButtons = clonedContainer.querySelector('.save-buttons');
                         if (clonedButtons) {
                             clonedButtons.style.display = 'none';
+                        }
+                        const clonedOutline = clonedContainer.querySelector('.outline-panel');
+                        if (clonedOutline) {
+                            clonedOutline.style.display = 'none';
                         }
 
                         tempContainer.appendChild(clonedContainer);
@@ -1652,6 +2307,9 @@ def render_html_content(
 
                     // 恢复按钮显示
                     buttons.style.visibility = 'visible';
+                    if (outlinePanel) {
+                        outlinePanel.style.visibility = 'visible';
+                    }
 
                     // 下载所有图片
                     const now = new Date();
@@ -1679,16 +2337,27 @@ def render_html_content(
                     console.error('分段保存失败:', error);
                     const buttons = document.querySelector('.save-buttons');
                     buttons.style.visibility = 'visible';
+                    const outlinePanel = document.querySelector('.outline-panel');
+                    if (outlinePanel) {
+                        outlinePanel.style.visibility = 'visible';
+                    }
                     button.textContent = '保存失败';
                     setTimeout(() => {
                         button.textContent = originalText;
                         button.disabled = false;
                     }, 2000);
+                } finally {
+                    restoreFoldStateSnapshot(foldStateSnapshot);
                 }
             }
 
             document.addEventListener('DOMContentLoaded', function() {
                 window.scrollTo(0, 0);
+                initFoldableSections();
+                buildOutline();
+                bindOutlineActions();
+                updateOutlinePanelLayout();
+                window.addEventListener('resize', updateOutlinePanelLayout);
             });
         </script>
     </body>
