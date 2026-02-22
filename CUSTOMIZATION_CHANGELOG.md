@@ -1,5 +1,19 @@
 # Customization Changelog
 
+## 2026-02-22
+
+### Newsletter list time display (customizable)
+- Added `display.time_display_mode` to `config.yaml`:
+  - `hidden`
+  - `observed`
+  - `publish`
+  - `publish_or_observed`
+- Added `display.show_observation_count` to control repeat-count display in list items.
+- Wired the setting into both:
+  - notification/newsletter list rendering
+  - HTML report hotlist and standalone hotlist rendering
+- Config editor (`docs/assets/script.js`) now exposes both controls in the `display` module.
+
 ## 2026-02-20
 
 ### HTML report UX
