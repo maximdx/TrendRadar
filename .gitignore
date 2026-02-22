@@ -1,0 +1,13 @@
+# Local runtime outputs
+output/
+
+# Python cache artifacts
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Local Playwright test artifacts
+.playwright-cli/
+
+# macOS metadata
+.DS_Store
