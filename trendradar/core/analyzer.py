@@ -249,6 +249,8 @@ def count_word_frequency(
             source_ranks = title_data.get("ranks", [])
             source_url = title_data.get("url", "")
             source_mobile_url = title_data.get("mobileUrl", "")
+            source_published_at = title_data.get("published_at", "")
+            source_extra = title_data.get("extra")
 
             # 找到匹配的词组（防御性转换确保类型安全）
             title_lower = str(title).lower() if not isinstance(title, str) else title.lower()
@@ -292,6 +294,7 @@ def count_word_frequency(
                 url = source_url
                 mobile_url = source_mobile_url
                 rank_timeline = []
+                published_at = source_published_at
 
                 # 对于 current 模式，从历史统计信息中获取完整数据
                 if (
@@ -309,6 +312,7 @@ def count_word_frequency(
                     url = info.get("url", source_url)
                     mobile_url = info.get("mobileUrl", source_mobile_url)
                     rank_timeline = info.get("rank_timeline", [])
+                    published_at = info.get("published_at", source_published_at)
                 elif (
                     title_info
                     and source_id in title_info
@@ -323,6 +327,7 @@ def count_word_frequency(
                     url = info.get("url", source_url)
                     mobile_url = info.get("mobileUrl", source_mobile_url)
                     rank_timeline = info.get("rank_timeline", [])
+                    published_at = info.get("published_at", source_published_at)
 
                 if not ranks:
                     ranks = [99]
@@ -341,22 +346,26 @@ def count_word_frequency(
                     new_titles_for_source = new_titles[source_id]
                     is_new = title in new_titles_for_source
 
-                word_stats[group_key]["titles"][source_id].append(
-                    {
-                        "title": title,
-                        "source_name": source_name,
-                        "first_time": first_time,
-                        "last_time": last_time,
-                        "time_display": time_display,
-                        "count": count_info,
-                        "ranks": ranks,
-                        "rank_threshold": rank_threshold,
-                        "url": url,
-                        "mobileUrl": mobile_url,
-                        "is_new": is_new,
-                        "rank_timeline": rank_timeline,
-                    }
-                )
+                title_record = {
+                    "title": title,
+                    "source_name": source_name,
+                    "first_time": first_time,
+                    "last_time": last_time,
+                    "time_display": time_display,
+                    "count": count_info,
+                    "ranks": ranks,
+                    "rank_threshold": rank_threshold,
+                    "url": url,
+                    "mobileUrl": mobile_url,
+                    "is_new": is_new,
+                    "rank_timeline": rank_timeline,
+                }
+                if published_at:
+                    title_record["published_at"] = published_at
+                if isinstance(source_extra, dict) and source_extra:
+                    title_record["extra"] = source_extra
+
+                word_stats[group_key]["titles"][source_id].append(title_record)
 
                 if source_id not in processed_titles:
                     processed_titles[source_id] = {}

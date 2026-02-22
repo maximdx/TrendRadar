@@ -12,9 +12,11 @@
 import json
 import random
 import time
-from typing import Dict, List, Tuple, Optional, Union
+from typing import Any, Dict, List, Tuple, Optional, Union
 
 import requests
+
+from trendradar.utils.time_display import PUBLISH_TIME_KEYS
 
 
 class DataFetcher:
@@ -31,6 +33,27 @@ class DataFetcher:
         "Connection": "keep-alive",
         "Cache-Control": "no-cache",
     }
+
+    @staticmethod
+    def _extract_publish_fields(item: Dict[str, Any]) -> Dict[str, Any]:
+        """从 API 条目中提取发布时间相关字段。"""
+        extracted: Dict[str, Any] = {}
+        for key in PUBLISH_TIME_KEYS:
+            value = item.get(key)
+            if value is not None and value != "":
+                extracted[key] = value
+
+        extra = item.get("extra")
+        if isinstance(extra, dict) and extra:
+            extracted["extra"] = extra
+            for key in PUBLISH_TIME_KEYS:
+                if key in extracted:
+                    continue
+                value = extra.get(key)
+                if value is not None and value != "":
+                    extracted[key] = value
+
+        return extracted
 
     def __init__(
         self,
@@ -156,15 +179,23 @@ class DataFetcher:
                         title = str(title).strip()
                         url = item.get("url", "")
                         mobile_url = item.get("mobileUrl", "")
+                        publish_fields = self._extract_publish_fields(item)
 
                         if title in results[id_value]:
                             results[id_value][title]["ranks"].append(index)
+                            # 补齐发布时间字段（保留首次命中的有效值）
+                            for key, value in publish_fields.items():
+                                if not value:
+                                    continue
+                                if not results[id_value][title].get(key):
+                                    results[id_value][title][key] = value
                         else:
                             results[id_value][title] = {
                                 "ranks": [index],
                                 "url": url,
                                 "mobileUrl": mobile_url,
                             }
+                            results[id_value][title].update(publish_fields)
                 except json.JSONDecodeError:
                     print(f"解析 {id_value} 响应失败")
                     failed_ids.append(id_value)

@@ -226,6 +226,7 @@ def _load_display_config(config_data: Dict) -> Dict:
     display = config_data.get("display", {})
     regions = display.get("regions", {})
     standalone = display.get("standalone", {})
+    publish_time_enrich = display.get("publish_time_enrich", {})
 
     # 列表时间显示配置（支持环境变量覆盖）
     time_display_mode = None
@@ -256,6 +257,29 @@ def _load_display_config(config_data: Dict) -> Dict:
     if not region_order:
         region_order = default_region_order
 
+    enrich_enabled = publish_time_enrich.get("enabled", True)
+    enrich_max_fetch = publish_time_enrich.get("max_fetch_per_run", 200)
+    enrich_timeout = publish_time_enrich.get("request_timeout", 8)
+    enrich_workers = publish_time_enrich.get("max_workers", 8)
+    enrich_miss_ttl = publish_time_enrich.get("miss_ttl_hours", 24)
+
+    try:
+        enrich_max_fetch = int(enrich_max_fetch)
+    except (ValueError, TypeError):
+        enrich_max_fetch = 200
+    try:
+        enrich_timeout = float(enrich_timeout)
+    except (ValueError, TypeError):
+        enrich_timeout = 8.0
+    try:
+        enrich_workers = int(enrich_workers)
+    except (ValueError, TypeError):
+        enrich_workers = 8
+    try:
+        enrich_miss_ttl = int(enrich_miss_ttl)
+    except (ValueError, TypeError):
+        enrich_miss_ttl = 24
+
     return {
         # 区域显示顺序
         "REGION_ORDER": region_order,
@@ -276,6 +300,13 @@ def _load_display_config(config_data: Dict) -> Dict:
         # 列表时间显示策略
         "TIME_DISPLAY_MODE": time_display_mode,
         "SHOW_OBSERVATION_COUNT": show_observation_count,
+        "PUBLISH_TIME_ENRICH": {
+            "ENABLED": bool(enrich_enabled),
+            "MAX_FETCH_PER_RUN": max(0, enrich_max_fetch),
+            "REQUEST_TIMEOUT": max(1.0, enrich_timeout),
+            "MAX_WORKERS": max(1, enrich_workers),
+            "MISS_TTL_HOURS": max(1, enrich_miss_ttl),
+        },
     }
 
 

@@ -14,6 +14,19 @@
   - HTML report hotlist and standalone hotlist rendering
 - Config editor (`docs/assets/script.js`) now exposes both controls in the `display` module.
 
+### Hotlist publish-time delivery (strict publish-first)
+- Added `published_at` persistence for hotlist items in storage schema and read/write path.
+- Crawler now keeps publish-time related fields from API payload (`pubDate`, `extra.date`, etc.).
+- Added runtime publish-time enrichment for hotlist list items:
+  - If source payload has no publish time, fetch from article URL metadata (`meta`, JSON-LD, `<time datetime>`)
+  - Cache results in `output/news/publish_time_cache.db` to avoid repeated crawling
+- Added `display.publish_time_enrich` config options:
+  - `enabled`
+  - `max_fetch_per_run`
+  - `request_timeout`
+  - `max_workers`
+  - `miss_ttl_hours`
+
 ## 2026-02-20
 
 ### HTML report UX

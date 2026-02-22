@@ -216,12 +216,21 @@ display:
   # - observed: 显示观察窗口时间（如 09:00~10:30）
   # - publish: 显示发布时间（仅当数据源提供发布时间字段时）
   # - publish_or_observed: 优先发布时间，缺失时回退观察窗口时间
-  time_display_mode: "publish_or_observed"
+  time_display_mode: "publish"
 
   # 是否显示出现次数（如 3次）
   # true: 显示
   # false: 隐藏
   show_observation_count: true
+
+  # 发布时间补全（仅在 time_display_mode 包含 publish 时生效）
+  # 作用：当平台接口未直接返回发布时间时，按 URL 抓取页面元信息进行补全
+  publish_time_enrich:
+    enabled: true                     # 是否启用发布时间补全
+    max_fetch_per_run: 200            # 每次运行最多抓取多少个 URL（0=不限制）
+    request_timeout: 8                # 单个 URL 抓取超时（秒）
+    max_workers: 8                    # 并发抓取线程数
+    miss_ttl_hours: 24                # 失败缓存有效期（小时，避免重复抓取）
 
   # 📋 独立展示区配置
   # 用途：将指定平台的完整热榜/RSS 数据独立提取，不受关键词过滤影响

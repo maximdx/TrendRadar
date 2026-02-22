@@ -20,6 +20,7 @@ class NewsItem:
     rank: int = 0                       # 排名
     url: str = ""                       # 链接 URL
     mobile_url: str = ""                # 移动端 URL
+    published_at: str = ""              # 文章发布时间（MM-DD HH:MM）
     crawl_time: str = ""                # 抓取时间（HH:MM 格式）
 
     # 统计信息（用于分析）
@@ -40,6 +41,7 @@ class NewsItem:
             "rank": self.rank,
             "url": self.url,
             "mobile_url": self.mobile_url,
+            "published_at": self.published_at,
             "crawl_time": self.crawl_time,
             "ranks": self.ranks,
             "first_time": self.first_time,
@@ -58,6 +60,7 @@ class NewsItem:
             rank=data.get("rank", 0),
             url=data.get("url", ""),
             mobile_url=data.get("mobile_url", ""),
+            published_at=data.get("published_at", ""),
             crawl_time=data.get("crawl_time", ""),
             ranks=data.get("ranks", []),
             first_time=data.get("first_time", ""),
@@ -271,6 +274,8 @@ class NewsData:
                         existing.url = item.url
                     if not existing.mobile_url and item.mobile_url:
                         existing.mobile_url = item.mobile_url
+                    if not existing.published_at and item.published_at:
+                        existing.published_at = item.published_at
                 else:
                     # 添加新新闻
                     merged_items[source_id][item.title] = item
@@ -488,6 +493,8 @@ def convert_crawl_results_to_news_data(
     """
     items = {}
 
+    from trendradar.utils.time_display import extract_publish_time_display
+
     for source_id, titles_data in results.items():
         source_name = id_to_name.get(source_id, source_id)
         news_list = []
@@ -496,6 +503,7 @@ def convert_crawl_results_to_news_data(
             ranks = data.get("ranks", [])
             url = data.get("url", "")
             mobile_url = data.get("mobileUrl", "")
+            published_at = extract_publish_time_display(data)
 
             rank = ranks[0] if ranks else 99
 
@@ -506,6 +514,7 @@ def convert_crawl_results_to_news_data(
                 rank=rank,
                 url=url,
                 mobile_url=mobile_url,
+                published_at=published_at,
                 crawl_time=crawl_time,
                 ranks=ranks,
                 first_time=crawl_time,

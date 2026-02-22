@@ -22,6 +22,7 @@ from trendradar.core.analyzer import convert_keyword_stats_to_platform_stats
 from trendradar.crawler import DataFetcher
 from trendradar.storage import convert_crawl_results_to_news_data
 from trendradar.utils.time import DEFAULT_TIMEZONE, is_within_days, calculate_days_old
+from trendradar.utils.publish_time import enrich_stats_publish_times
 from trendradar.ai import AIAnalyzer, AIAnalysisResult
 from trendradar.core.scheduler import ResolvedSchedule
 
@@ -621,6 +622,7 @@ class NewsAnalyzer:
                 ranks = title_data.get("ranks", [])
                 url = title_data.get("url", "")
                 mobile_url = title_data.get("mobileUrl", "")
+                published_at = title_data.get("published_at", "")
 
                 title_info[source_id][title] = {
                     "first_time": time_info,
@@ -629,6 +631,7 @@ class NewsAnalyzer:
                     "ranks": ranks,
                     "url": url,
                     "mobileUrl": mobile_url,
+                    "published_at": published_at,
                 }
         return title_info
 
@@ -726,6 +729,10 @@ class NewsAnalyzer:
                     "last_time": meta.get("last_time", ""),
                     "count": meta.get("count", 1),
                     "rank_timeline": meta.get("rank_timeline", []),
+                    "published_at": (
+                        meta.get("published_at")
+                        or title_data.get("published_at", "")
+                    ),
                 }
                 items.append(item)
 
@@ -822,6 +829,9 @@ class NewsAnalyzer:
                 self.ctx.rank_threshold,
             )
 
+        # 发布时刻补全（仅在 publish 系列模式下启用）
+        stats = self._enrich_publish_times_for_stats(stats, quiet=quiet)
+
         # AI 分析（如果启用，用于 HTML 报告）
         ai_result = None
         ai_config = self.ctx.config.get("AI_ANALYSIS", {})
@@ -853,6 +863,42 @@ class NewsAnalyzer:
             )
 
         return stats, html_file, ai_result
+
+    def _enrich_publish_times_for_stats(self, stats: List[Dict], quiet: bool = False) -> List[Dict]:
+        """为热点统计结果补全发布时间。"""
+        if not stats:
+            return stats
+
+        time_mode = self.ctx.time_display_mode or "hidden"
+        if time_mode not in {"publish", "publish_or_observed"}:
+            return stats
+
+        display_cfg = self.ctx.config.get("DISPLAY", {})
+        enrich_cfg = display_cfg.get("PUBLISH_TIME_ENRICH", {})
+        if not enrich_cfg.get("ENABLED", True):
+            return stats
+
+        summary = enrich_stats_publish_times(
+            stats,
+            cache_db_path="output/news/publish_time_cache.db",
+            max_fetch_per_run=enrich_cfg.get("MAX_FETCH_PER_RUN", 200),
+            request_timeout=enrich_cfg.get("REQUEST_TIMEOUT", 8.0),
+            max_workers=enrich_cfg.get("MAX_WORKERS", 8),
+            miss_ttl_hours=enrich_cfg.get("MISS_TTL_HOURS", 24),
+        )
+
+        if not quiet:
+            print(
+                "[发布时间] 补全完成: "
+                f"总条目 {summary['titles_total']}，"
+                f"已有 {summary['already_has_publish']}，"
+                f"缓存命中 {summary['cache_hit']}，"
+                f"网络成功 {summary['fetched_titles_success']}，"
+                f"网络失败 {summary['fetched_titles_fail']}，"
+                f"无URL {summary['no_url']}"
+            )
+
+        return stats
 
     def _send_notification_if_needed(
         self,
