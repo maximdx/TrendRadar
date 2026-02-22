@@ -11,6 +11,12 @@ from typing import Dict, List, Optional, Callable
 from trendradar.report.formatter import format_title_for_platform
 from trendradar.report.helpers import format_rank_display
 from trendradar.utils.time import DEFAULT_TIMEZONE, format_iso_time_friendly, convert_time_for_display
+from trendradar.utils.time_display import (
+    normalize_time_display_mode,
+    extract_publish_time_display,
+    resolve_show_observation_count,
+    resolve_time_display,
+)
 
 
 # 默认批次大小配置
@@ -23,6 +29,25 @@ DEFAULT_BATCH_SIZES = {
 
 # 默认区域顺序
 DEFAULT_REGION_ORDER = ["hotlist", "rss", "new_items", "standalone", "ai_analysis"]
+
+
+def _prepare_hotlist_title_for_display(
+    title_data: Dict,
+    time_display_mode: str,
+    show_observation_count: bool,
+) -> Dict:
+    """按时间显示策略预处理热榜条目。"""
+    prepared = title_data.copy()
+    observed_display = title_data.get("time_display", "")
+    publish_display = extract_publish_time_display(title_data)
+    prepared["time_display"] = resolve_time_display(
+        time_display_mode,
+        observed_display=observed_display,
+        publish_display=publish_display,
+    )
+    if not show_observation_count:
+        prepared["count"] = 1
+    return prepared
 
 
 def split_content_into_batches(
@@ -45,6 +70,8 @@ def split_content_into_batches(
     ai_stats: Optional[Dict] = None,
     report_type: str = "热点分析报告",
     show_new_section: bool = True,
+    time_display_mode: Optional[str] = None,
+    show_observation_count: Optional[bool] = None,
 ) -> List[str]:
     """分批处理消息内容，确保词组标题+至少第一条新闻的完整性（支持热榜+RSS合并+AI分析+独立展示区）
 
@@ -67,6 +94,8 @@ def split_content_into_batches(
         rss_new_items: RSS 新增条目列表（可选，用于新增区块）
         timezone: 时区名称（用于 RSS 时间格式化）
         display_mode: 显示模式 (keyword=按关键词分组, platform=按平台分组)
+        time_display_mode: 热榜列表时间显示模式（hidden/observed/publish/publish_or_observed）
+        show_observation_count: 是否显示出现次数（None 时按模式自动）
         ai_content: AI 分析内容（已渲染的字符串，可选）
         standalone_data: 独立展示区数据（可选），包含 platforms 和 rss_feeds 列表
         ai_stats: AI 分析统计数据（可选），包含 total_news, analyzed_news, max_news_limit 等
@@ -88,6 +117,15 @@ def split_content_into_batches(
             max_bytes = sizes.get("ntfy", 3800)
         else:
             max_bytes = sizes.get("default", 4000)
+
+    resolved_time_mode = normalize_time_display_mode(
+        time_display_mode,
+        default="observed",
+    )
+    resolved_show_observation_count = resolve_show_observation_count(
+        resolved_time_mode,
+        show_observation_count,
+    )
 
     batches = []
 
@@ -349,7 +387,11 @@ def split_content_into_batches(
             show_keyword = display_mode == "platform"
             first_news_line = ""
             if stat["titles"]:
-                first_title_data = stat["titles"][0]
+                first_title_data = _prepare_hotlist_title_for_display(
+                    stat["titles"][0],
+                    resolved_time_mode,
+                    resolved_show_observation_count,
+                )
                 if format_type in ("wework", "bark"):
                     formatted_title = format_title_for_platform(
                         "wework", first_title_data, show_source=show_source, show_keyword=show_keyword
@@ -402,7 +444,11 @@ def split_content_into_batches(
 
             # 处理剩余新闻条目
             for j in range(start_index, len(stat["titles"])):
-                title_data = stat["titles"][j]
+                title_data = _prepare_hotlist_title_for_display(
+                    stat["titles"][j],
+                    resolved_time_mode,
+                    resolved_show_observation_count,
+                )
                 if format_type in ("wework", "bark"):
                     formatted_title = format_title_for_platform(
                         "wework", title_data, show_source=show_source, show_keyword=show_keyword
@@ -686,7 +732,8 @@ def split_content_into_batches(
         return _process_standalone_section(
             standalone_data, format_type, feishu_separator, base_header, base_footer,
             max_bytes, current_batch, current_batch_has_content, batches, timezone,
-            rank_threshold, add_separator
+            rank_threshold, add_separator,
+            resolved_time_mode, resolved_show_observation_count
         )
 
     # 定义处理 RSS 统计的函数
@@ -1300,6 +1347,8 @@ def _process_standalone_section(
     timezone: str = DEFAULT_TIMEZONE,
     rank_threshold: int = 10,
     add_separator: bool = True,
+    time_display_mode: str = "observed",
+    show_observation_count: bool = True,
 ) -> tuple:
     """处理独立展示区区块
 
@@ -1323,6 +1372,8 @@ def _process_standalone_section(
         timezone: 时区名称
         rank_threshold: 排名高亮阈值
         add_separator: 是否在区块前添加分割线（第一个区域时为 False）
+        time_display_mode: 热榜条目时间显示模式
+        show_observation_count: 是否显示出现次数
 
     Returns:
         (current_batch, current_batch_has_content, batches) 元组
@@ -1406,7 +1457,14 @@ def _process_standalone_section(
         # 构建第一条新闻
         first_item_line = ""
         if items:
-            first_item_line = _format_standalone_platform_item(items[0], 1, format_type, rank_threshold)
+            first_item_line = _format_standalone_platform_item(
+                items[0],
+                1,
+                format_type,
+                rank_threshold,
+                time_display_mode=time_display_mode,
+                show_observation_count=show_observation_count,
+            )
 
         # 原子性检查
         platform_with_first = platform_header + first_item_line
@@ -1425,7 +1483,14 @@ def _process_standalone_section(
 
         # 处理剩余条目
         for j in range(start_index, len(items)):
-            item_line = _format_standalone_platform_item(items[j], j + 1, format_type, rank_threshold)
+            item_line = _format_standalone_platform_item(
+                items[j],
+                j + 1,
+                format_type,
+                rank_threshold,
+                time_display_mode=time_display_mode,
+                show_observation_count=show_observation_count,
+            )
 
             test_content = current_batch + item_line
             if len(test_content.encode("utf-8")) + len(base_footer.encode("utf-8")) >= max_bytes:
@@ -1500,7 +1565,14 @@ def _process_standalone_section(
     return current_batch, current_batch_has_content, batches
 
 
-def _format_standalone_platform_item(item: Dict, index: int, format_type: str, rank_threshold: int = 10) -> str:
+def _format_standalone_platform_item(
+    item: Dict,
+    index: int,
+    format_type: str,
+    rank_threshold: int = 10,
+    time_display_mode: str = "observed",
+    show_observation_count: bool = True,
+) -> str:
     """格式化独立展示区的热榜条目（复用热点词汇统计区样式）
 
     Args:
@@ -1508,6 +1580,8 @@ def _format_standalone_platform_item(item: Dict, index: int, format_type: str, r
         index: 序号
         format_type: 格式类型
         rank_threshold: 排名高亮阈值
+        time_display_mode: 时间显示模式
+        show_observation_count: 是否显示出现次数
 
     Returns:
         格式化后的条目行字符串
@@ -1526,18 +1600,25 @@ def _format_standalone_platform_item(item: Dict, index: int, format_type: str, r
         ranks = [rank]
     rank_display = format_rank_display(ranks, rank_threshold, format_type) if ranks else ""
 
-    # 构建时间显示（用 ~ 连接范围，与热点词汇统计区一致）
+    # 构建观察时间显示（用 ~ 连接范围，与热点词汇统计区一致）
     # 将 HH-MM 格式转换为 HH:MM 格式
-    time_display = ""
+    observed_display = ""
     if first_time and last_time and first_time != last_time:
         first_time_display = convert_time_for_display(first_time)
         last_time_display = convert_time_for_display(last_time)
-        time_display = f"{first_time_display}~{last_time_display}"
+        observed_display = f"{first_time_display}~{last_time_display}"
     elif first_time:
-        time_display = convert_time_for_display(first_time)
+        observed_display = convert_time_for_display(first_time)
+
+    publish_display = extract_publish_time_display(item)
+    time_display = resolve_time_display(
+        time_display_mode,
+        observed_display=observed_display,
+        publish_display=publish_display,
+    )
 
     # 构建次数显示（格式为 (N次)，与热点词汇统计区一致）
-    count_display = f"({count}次)" if count > 1 else ""
+    count_display = f"({count}次)" if show_observation_count and count > 1 else ""
 
     # 根据格式类型构建条目行（复用热点词汇统计区样式）
     if format_type == "feishu":

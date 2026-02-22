@@ -122,6 +122,16 @@ class AppContext:
         return self.config.get("DISPLAY_MODE", "keyword")
 
     @property
+    def time_display_mode(self) -> Optional[str]:
+        """获取列表时间显示模式"""
+        return self.config.get("DISPLAY", {}).get("TIME_DISPLAY_MODE")
+
+    @property
+    def show_observation_count(self) -> Optional[bool]:
+        """是否显示出现次数"""
+        return self.config.get("DISPLAY", {}).get("SHOW_OBSERVATION_COUNT")
+
+    @property
     def show_new_section(self) -> bool:
         """是否显示新增热点区域"""
         return self.config.get("DISPLAY", {}).get("REGIONS", {}).get("NEW_ITEMS", True)
@@ -337,6 +347,8 @@ class AppContext:
             rss_items=rss_items,
             rss_new_items=rss_new_items,
             display_mode=self.display_mode,
+            time_display_mode=self.time_display_mode,
+            show_observation_count=self.show_observation_count,
             ai_analysis=ai_analysis,
             show_new_section=self.show_new_section,
             standalone_data=standalone_data,
@@ -427,6 +439,8 @@ class AppContext:
             rss_new_items=rss_new_items,
             timezone=self.config.get("TIMEZONE", DEFAULT_TIMEZONE),
             display_mode=self.display_mode,
+            time_display_mode=self.time_display_mode,
+            show_observation_count=self.show_observation_count,
             ai_content=ai_content,
             standalone_data=standalone_data,
             rank_threshold=self.rank_threshold,

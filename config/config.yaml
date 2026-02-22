@@ -211,6 +211,18 @@ display:
     standalone: false                 # 独立展示区（完整热榜/RSS，不受关键词过滤）
     ai_analysis: true                 # AI 分析区域
 
+  # 列表时间显示策略（影响热榜列表和独立展示区热榜列表）
+  # - hidden: 不显示时间
+  # - observed: 显示观察窗口时间（如 09:00~10:30）
+  # - publish: 显示发布时间（仅当数据源提供发布时间字段时）
+  # - publish_or_observed: 优先发布时间，缺失时回退观察窗口时间
+  time_display_mode: "publish_or_observed"
+
+  # 是否显示出现次数（如 3次）
+  # true: 显示
+  # false: 隐藏
+  show_observation_count: true
+
   # 📋 独立展示区配置
   # 用途：将指定平台的完整热榜/RSS 数据独立提取，不受关键词过滤影响
   # 两个独立用途：

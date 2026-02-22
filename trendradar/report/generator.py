@@ -118,6 +118,29 @@ def prepare_report_data(
                 "mobile_url": title_data.get("mobileUrl", ""),
                 "is_new": title_data.get("is_new", False),
             }
+
+            # 保留发布时间相关字段，供 publish 模式使用
+            publish_time_keys = (
+                "published_at",
+                "publishedAt",
+                "published_time",
+                "publish_time",
+                "pubDate",
+                "pub_date",
+                "date",
+                "datetime",
+                "created_at",
+                "createdAt",
+            )
+            for key in publish_time_keys:
+                value = title_data.get(key)
+                if value is not None and value != "":
+                    processed_title[key] = value
+
+            extra = title_data.get("extra")
+            if isinstance(extra, dict) and extra:
+                processed_title["extra"] = extra
+
             processed_titles.append(processed_title)
 
         processed_stats.append(

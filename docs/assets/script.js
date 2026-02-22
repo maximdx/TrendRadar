@@ -890,6 +890,21 @@ function renderControls(mod) {
                         提示：列表顺序决定了报告中的显示顺序
                      </div>`;
 
+            html += `<div class="border-t border-gray-200 pt-4 mt-4">`;
+            html += `<div class="text-xs font-bold text-gray-700 mb-3">列表时间显示</div>`;
+            html += createSelectControlWithLabels(mod.key, "time_display_mode", "时间显示模式", [
+                { value: "hidden", label: "hidden（不显示）" },
+                { value: "observed", label: "observed（观察窗口）" },
+                { value: "publish", label: "publish（发布时间）" },
+                { value: "publish_or_observed", label: "publish_or_observed（优先发布时间）" }
+            ]);
+            html += createToggleControl(mod.key, "show_observation_count", "显示出现次数");
+            html += `<div class="text-[11px] text-gray-500 mt-2 mb-1">
+                        <i class="fa-solid fa-clock mr-1"></i>
+                        publish 模式需要数据源提供发布时间；建议默认使用 publish_or_observed。
+                     </div>`;
+            html += `</div>`;
+
             // Standalone Configuration Section
             html += `<div class="border-t border-gray-200 pt-4 mt-4">`;
             html += `<div class="text-xs font-bold text-gray-700 mb-3">独立展示区配置 <span class="text-gray-400 font-normal">(推送展示由上方开关控制，AI 分析由 AI 模块的开关独立控制)</span></div>`;
@@ -1074,7 +1089,29 @@ function updateYamlFromUI(modKey, path, el) {
         }
     }
 
-    if (targetLine < 0) return;
+    if (targetLine < 0) {
+        // 兼容旧版 config.yaml：若缺少 display.time_display_mode / show_observation_count，则自动补齐
+        if (modKey === 'display' && (path === 'time_display_mode' || path === 'show_observation_count')) {
+            let insertAt = moduleEndLine;
+            for (let i = moduleStartLine + 1; i < moduleEndLine; i++) {
+                if (lines[i].trim().startsWith('standalone:')) {
+                    insertAt = i;
+                    break;
+                }
+            }
+
+            const fallbackVal = typeof newVal === 'string'
+                ? `"${newVal.replace(/"/g, '\\"')}"`
+                : newVal;
+
+            lines.splice(insertAt, 0, `  ${path}: ${fallbackVal}`);
+            editor.value = lines.join('\n');
+            currentYaml = editor.value;
+            updateBackdrop('yaml-editor', 'yaml-backdrop');
+            debounceSaveConfig();
+        }
+        return;
+    }
 
     // 更新该行，保留注释
     const originalLine = lines[targetLine];
@@ -1151,6 +1188,20 @@ function createNumberControl(mod, path, label) {
 
 function createSelectControl(mod, path, label, options) {
     const optionsHtml = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+    return `
+        <div>
+            <label class="block text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-1">${label}</label>
+            <select data-path="${path}" class="bg-white border-gray-300">
+                ${optionsHtml}
+            </select>
+        </div>
+    `;
+}
+
+function createSelectControlWithLabels(mod, path, label, options) {
+    const optionsHtml = options
+        .map(opt => `<option value="${opt.value}">${opt.label}</option>`)
+        .join('');
     return `
         <div>
             <label class="block text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-1">${label}</label>

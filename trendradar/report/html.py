@@ -11,6 +11,12 @@ from typing import Any, Dict, List, Optional, Callable
 
 from trendradar.report.helpers import html_escape
 from trendradar.utils.time import convert_time_for_display
+from trendradar.utils.time_display import (
+    normalize_time_display_mode,
+    extract_publish_time_display,
+    resolve_show_observation_count,
+    resolve_time_display,
+)
 from trendradar.ai.formatter import render_ai_analysis_html_rich
 
 
@@ -28,6 +34,8 @@ def render_html_content(
     standalone_data: Optional[Dict] = None,
     ai_analysis: Optional[Any] = None,
     show_new_section: bool = True,
+    time_display_mode: Optional[str] = None,
+    show_observation_count: Optional[bool] = None,
 ) -> str:
     """渲染HTML内容
 
@@ -44,6 +52,8 @@ def render_html_content(
         standalone_data: 独立展示区数据（可选），包含 platforms 和 rss_feeds
         ai_analysis: AI 分析结果对象（可选），AIAnalysisResult 实例
         show_new_section: 是否显示新增热点区域
+        time_display_mode: 时间显示模式（hidden/observed/publish/publish_or_observed）
+        show_observation_count: 是否显示出现次数（None 时按模式自动）
 
     Returns:
         渲染后的 HTML 字符串
@@ -59,26 +69,22 @@ def render_html_content(
             return default
         return raw.strip().lower() in {"1", "true", "yes", "on", "y"}
 
-    # 默认隐藏“观察窗口时间”和“出现次数”，可通过环境变量开启显示模式
-    time_mode_raw = os.getenv("HTML_TIME_DISPLAY_MODE", "hidden").strip().lower()
-    time_mode_aliases = {
-        "observation": "observed",
-        "observe": "observed",
-        "published": "publish",
-        "none": "hidden",
-        "off": "hidden",
-        "false": "hidden",
-        "0": "hidden",
-    }
-    time_mode = time_mode_aliases.get(time_mode_raw, time_mode_raw)
-    if time_mode not in {"observed", "publish", "publish_or_observed", "hidden"}:
-        time_mode = "hidden"
+    # time_display_mode/show_observation_count 支持 config 传入，缺省时回退环境变量
+    if time_display_mode is not None:
+        time_mode = normalize_time_display_mode(time_display_mode, default="hidden")
+    else:
+        time_mode = normalize_time_display_mode(
+            os.getenv("HTML_TIME_DISPLAY_MODE", "hidden"),
+            default="hidden",
+        )
 
-    # 是否显示“出现次数”，对 publish/hidden 模式默认关闭
-    show_observation_count = get_env_bool(
-        "HTML_SHOW_OBSERVATION_COUNT",
-        time_mode in {"observed", "publish_or_observed"},
-    )
+    if show_observation_count is None:
+        show_observation_count = get_env_bool(
+            "HTML_SHOW_OBSERVATION_COUNT",
+            resolve_show_observation_count(time_mode, None),
+        )
+    else:
+        show_observation_count = bool(show_observation_count)
 
     def simplify_observed_time(time_display: str) -> str:
         if not time_display:
@@ -89,111 +95,14 @@ def render_html_content(
             .replace("]", "")
         )
 
-    def format_datetime_like(value: Any) -> str:
-        if value is None:
-            return ""
-
-        # unix 时间戳（秒 / 毫秒）
-        if isinstance(value, (int, float)):
-            ts = float(value)
-            if ts > 10_000_000_000:
-                ts /= 1000.0
-            try:
-                return datetime.fromtimestamp(ts).strftime("%m-%d %H:%M")
-            except (ValueError, OSError, OverflowError):
-                return ""
-
-        if not isinstance(value, str):
-            return ""
-
-        raw = value.strip()
-        if not raw:
-            return ""
-
-        if raw.isdigit():
-            try:
-                ts = float(raw)
-                if ts > 10_000_000_000:
-                    ts /= 1000.0
-                return datetime.fromtimestamp(ts).strftime("%m-%d %H:%M")
-            except (ValueError, OSError, OverflowError):
-                pass
-
-        iso_candidates = [raw, raw.replace("Z", "+00:00")]
-        for candidate in iso_candidates:
-            try:
-                dt = datetime.fromisoformat(candidate)
-                return dt.strftime("%m-%d %H:%M")
-            except ValueError:
-                continue
-
-        known_formats = [
-            "%Y-%m-%d %H:%M:%S",
-            "%Y-%m-%d %H:%M",
-            "%Y/%m/%d %H:%M:%S",
-            "%Y/%m/%d %H:%M",
-            "%Y-%m-%d",
-            "%Y/%m/%d",
-            "%m-%d %H:%M",
-            "%H:%M",
-        ]
-        for fmt in known_formats:
-            try:
-                dt = datetime.strptime(raw, fmt)
-                if fmt == "%H:%M":
-                    return raw
-                if fmt in {"%m-%d %H:%M"}:
-                    return dt.strftime("%m-%d %H:%M")
-                return dt.strftime("%m-%d %H:%M")
-            except ValueError:
-                continue
-
-        # 兜底：原样返回，避免丢失可读时间
-        return raw
-
-    def extract_publish_time_display(item: Dict[str, Any]) -> str:
-        if not isinstance(item, dict):
-            return ""
-
-        sources: List[Dict[str, Any]] = [item]
-        extra = item.get("extra")
-        if isinstance(extra, dict):
-            sources.append(extra)
-
-        candidate_keys = [
-            "published_at",
-            "publishedAt",
-            "published_time",
-            "publish_time",
-            "pubDate",
-            "pub_date",
-            "date",
-            "datetime",
-            "created_at",
-            "createdAt",
-        ]
-
-        for source in sources:
-            for key in candidate_keys:
-                if key not in source:
-                    continue
-                formatted = format_datetime_like(source.get(key))
-                if formatted:
-                    return formatted
-
-        return ""
-
     def resolve_hotlist_time_display(item: Dict[str, Any]) -> str:
         observed_display = simplify_observed_time(item.get("time_display", ""))
         publish_display = extract_publish_time_display(item)
-
-        if time_mode == "hidden":
-            return ""
-        if time_mode == "publish":
-            return publish_display
-        if time_mode == "publish_or_observed":
-            return publish_display or observed_display
-        return observed_display
+        return resolve_time_display(
+            time_mode,
+            observed_display=observed_display,
+            publish_display=publish_display,
+        )
 
     def resolve_standalone_time_display(item: Dict[str, Any]) -> str:
         publish_display = extract_publish_time_display(item)
@@ -208,13 +117,11 @@ def render_html_content(
         elif first_time:
             observed_display = convert_time_for_display(first_time)
 
-        if time_mode == "hidden":
-            return ""
-        if time_mode == "publish":
-            return publish_display
-        if time_mode == "publish_or_observed":
-            return publish_display or observed_display
-        return observed_display
+        return resolve_time_display(
+            time_mode,
+            observed_display=observed_display,
+            publish_display=publish_display,
+        )
 
     html = """
     <!DOCTYPE html>

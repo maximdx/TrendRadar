@@ -13,6 +13,7 @@ import yaml
 
 from .config import parse_multi_account_config, validate_paired_configs
 from trendradar.utils.time import DEFAULT_TIMEZONE
+from trendradar.utils.time_display import normalize_time_display_mode
 
 
 def _get_env_bool(key: str, default: bool = False) -> Optional[bool]:
@@ -226,6 +227,23 @@ def _load_display_config(config_data: Dict) -> Dict:
     regions = display.get("regions", {})
     standalone = display.get("standalone", {})
 
+    # 列表时间显示配置（支持环境变量覆盖）
+    time_display_mode = None
+    mode_from_yaml = display.get("time_display_mode")
+    mode_from_env = _get_env_str("HTML_TIME_DISPLAY_MODE")
+    raw_mode = mode_from_env or mode_from_yaml
+    if raw_mode is not None and str(raw_mode).strip():
+        time_display_mode = normalize_time_display_mode(str(raw_mode), default="hidden")
+
+    show_observation_count = None
+    show_count_env = _get_env_bool("HTML_SHOW_OBSERVATION_COUNT")
+    if show_count_env is not None:
+        show_observation_count = show_count_env
+    else:
+        show_count_yaml = display.get("show_observation_count")
+        if isinstance(show_count_yaml, bool):
+            show_observation_count = show_count_yaml
+
     # 默认区域顺序
     default_region_order = ["hotlist", "rss", "new_items", "standalone", "ai_analysis"]
     region_order = display.get("region_order", default_region_order)
@@ -255,6 +273,9 @@ def _load_display_config(config_data: Dict) -> Dict:
             "RSS_FEEDS": standalone.get("rss_feeds", []),
             "MAX_ITEMS": standalone.get("max_items", 20),
         },
+        # 列表时间显示策略
+        "TIME_DISPLAY_MODE": time_display_mode,
+        "SHOW_OBSERVATION_COUNT": show_observation_count,
     }
 
 
