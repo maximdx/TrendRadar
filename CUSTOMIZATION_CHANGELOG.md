@@ -1,5 +1,21 @@
 # Customization Changelog
 
+## 2026-02-26
+
+### Cross-source duplicate dedupe in keyword stats
+- Added cross-source dedupe for keyword-stat news records in `trendradar/core/analyzer.py`.
+- Dedupe keys now prefer normalized URL signature (`get_url_signature`) and fall back to normalized title signatures.
+- Duplicate records are merged into one item while preserving multi-source attribution:
+  - keeps `source_names` list and joins them into `source_name` for display
+  - keeps `is_new` if either side is new
+  - fills missing `url`, `mobileUrl`, `published_at`, and `rank_timeline` from the duplicate record when needed
+- Added replacement priority when duplicate items conflict:
+  - better best rank first
+  - then higher observed count
+  - then longer title
+- Added dedupe log output for daily processing:
+  - `跨源去重：合并 X 条重复新闻`
+
 ## 2026-02-22
 
 ### Newsletter list time display (customizable)
