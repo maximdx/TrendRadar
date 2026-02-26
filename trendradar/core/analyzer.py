@@ -8,10 +8,94 @@
 - count_word_frequency: 统计词频
 """
 
+import re
 from typing import Dict, List, Tuple, Optional, Callable
 
 from trendradar.core.frequency import matches_word_groups, _word_matches
 from trendradar.utils.time import DEFAULT_TIMEZONE
+from trendradar.utils.url import get_url_signature
+
+
+_TITLE_DEDUPE_MIN_LEN = 8
+
+
+def _normalize_title_for_dedupe(title: str) -> str:
+    """标准化标题用于跨源去重（保留中英文与数字，去除空白和标点）。"""
+    if not title:
+        return ""
+    normalized = str(title).lower()
+    normalized = re.sub(r"[\s\u3000]+", "", normalized)
+    normalized = re.sub(r"[^\w\u4e00-\u9fff]", "", normalized, flags=re.UNICODE)
+    return normalized
+
+
+def _build_cross_source_dedupe_keys(title: str, url: str, source_id: str) -> List[str]:
+    """
+    构建跨源去重键：
+    1. URL 归一化签名（优先，最可靠）
+    2. 标题归一化签名（兜底，覆盖不同平台同标题情况）
+    """
+    keys: List[str] = []
+
+    if url:
+        signature = get_url_signature(url, source_id)
+        if signature:
+            keys.append(f"url:{signature}")
+
+    normalized_title = _normalize_title_for_dedupe(title)
+    if len(normalized_title) >= _TITLE_DEDUPE_MIN_LEN:
+        keys.append(f"title:{normalized_title}")
+
+    return keys
+
+
+def _should_replace_record(existing: Dict, incoming: Dict) -> bool:
+    """
+    判断去重时是否使用新记录替换旧记录。
+    优先级：最佳排名 -> 出现次数 -> 标题长度。
+    """
+    existing_best_rank = min(existing.get("ranks", [999]) or [999])
+    incoming_best_rank = min(incoming.get("ranks", [999]) or [999])
+    if incoming_best_rank != existing_best_rank:
+        return incoming_best_rank < existing_best_rank
+
+    existing_count = existing.get("count", 0)
+    incoming_count = incoming.get("count", 0)
+    if incoming_count != existing_count:
+        return incoming_count > existing_count
+
+    return len(incoming.get("title", "")) > len(existing.get("title", ""))
+
+
+def _merge_cross_source_record(existing: Dict, incoming: Dict) -> None:
+    """将重复记录合并为单条，保留多来源信息。"""
+    existing_sources = set(existing.get("source_names") or [existing.get("source_name", "")])
+    incoming_sources = set(incoming.get("source_names") or [incoming.get("source_name", "")])
+    merged_sources = sorted(s for s in (existing_sources | incoming_sources) if s)
+
+    # 保留更“强”的记录作为主体
+    if _should_replace_record(existing, incoming):
+        keep_is_new = bool(existing.get("is_new")) or bool(incoming.get("is_new"))
+        existing.clear()
+        existing.update(incoming)
+        existing["is_new"] = keep_is_new
+    else:
+        existing["is_new"] = bool(existing.get("is_new")) or bool(incoming.get("is_new"))
+        if not existing.get("url") and incoming.get("url"):
+            existing["url"] = incoming.get("url")
+        if not existing.get("mobileUrl") and incoming.get("mobileUrl"):
+            existing["mobileUrl"] = incoming.get("mobileUrl")
+        if not existing.get("published_at") and incoming.get("published_at"):
+            existing["published_at"] = incoming.get("published_at")
+        if (
+            (not existing.get("rank_timeline"))
+            and incoming.get("rank_timeline")
+        ):
+            existing["rank_timeline"] = incoming.get("rank_timeline")
+
+    if merged_sources:
+        existing["source_names"] = merged_sources
+        existing["source_name"] = " / ".join(merged_sources)
 
 
 def calculate_news_weight(
@@ -209,9 +293,11 @@ def count_word_frequency(
         print(f"当日汇总模式：处理 {total_input_news} 条新闻，模式：{filter_status}")
 
     word_stats = {}
+    dedupe_index_by_group: Dict[str, Dict[str, Dict]] = {}
     total_titles = 0
     processed_titles = {}
     matched_new_count = 0
+    cross_source_deduped_count = 0
 
     if title_info is None:
         title_info = {}
@@ -220,7 +306,8 @@ def count_word_frequency(
 
     for group in word_groups:
         group_key = group["group_key"]
-        word_stats[group_key] = {"count": 0, "titles": {}}
+        word_stats[group_key] = {"count": 0, "titles": []}
+        dedupe_index_by_group[group_key] = {}
 
     for source_id, titles_data in results_to_process.items():
         total_titles += len(titles_data)
@@ -261,9 +348,6 @@ def count_word_frequency(
                 # 如果是"全部新闻"模式，所有标题都匹配第一个（唯一的）词组
                 if len(word_groups) == 1 and word_groups[0]["group_key"] == "全部新闻":
                     group_key = group["group_key"]
-                    word_stats[group_key]["count"] += 1
-                    if source_id not in word_stats[group_key]["titles"]:
-                        word_stats[group_key]["titles"][source_id] = []
                 else:
                     # 原有的匹配逻辑（支持正则语法）
                     if required_words:
@@ -283,9 +367,6 @@ def count_word_frequency(
                             continue
 
                     group_key = group["group_key"]
-                    word_stats[group_key]["count"] += 1
-                    if source_id not in word_stats[group_key]["titles"]:
-                        word_stats[group_key]["titles"][source_id] = []
 
                 first_time = ""
                 last_time = ""
@@ -365,7 +446,24 @@ def count_word_frequency(
                 if isinstance(source_extra, dict) and source_extra:
                     title_record["extra"] = source_extra
 
-                word_stats[group_key]["titles"][source_id].append(title_record)
+                dedupe_keys = _build_cross_source_dedupe_keys(title, url, source_id)
+                group_dedupe_index = dedupe_index_by_group[group_key]
+                existing_record = None
+                for dedupe_key in dedupe_keys:
+                    if dedupe_key in group_dedupe_index:
+                        existing_record = group_dedupe_index[dedupe_key]
+                        break
+
+                if existing_record:
+                    _merge_cross_source_record(existing_record, title_record)
+                    cross_source_deduped_count += 1
+                    for dedupe_key in dedupe_keys:
+                        group_dedupe_index[dedupe_key] = existing_record
+                else:
+                    word_stats[group_key]["titles"].append(title_record)
+                    word_stats[group_key]["count"] += 1
+                    for dedupe_key in dedupe_keys:
+                        group_dedupe_index[dedupe_key] = title_record
 
                 if source_id not in processed_titles:
                     processed_titles[source_id] = {}
@@ -441,9 +539,7 @@ def count_word_frequency(
     }
 
     for group_key, data in word_stats.items():
-        all_titles = []
-        for source_id, title_list in data["titles"].items():
-            all_titles.extend(title_list)
+        all_titles = list(data["titles"])
 
         # 按权重排序
         sorted_titles = sorted(
@@ -491,6 +587,8 @@ def count_word_frequency(
 
     # 打印过滤后的匹配新闻数
     matched_news_count = sum(len(stat["titles"]) for stat in stats if stat["count"] > 0)
+    if not quiet and cross_source_deduped_count > 0:
+        print(f"跨源去重：合并 {cross_source_deduped_count} 条重复新闻")
     if not quiet and mode == "daily":
         print(f"当日汇总模式：处理 {total_titles} 条新闻，模式：频率词过滤")
         print(f"频率词过滤后：{matched_news_count} 条新闻匹配")
