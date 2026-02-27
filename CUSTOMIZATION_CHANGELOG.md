@@ -2,6 +2,15 @@
 
 ## 2026-02-26
 
+### HTML report theme control
+- Moved the report theme control into the top-right header toolbar to avoid overlapping the title area.
+- Simplified the report UI control to a single light/dark toggle plus status text.
+- Added `display.theme_mode` to `config.yaml` with values:
+  - `system`
+  - `light`
+  - `dark`
+- Manual toggling now switches only the effective theme and no longer flips the follow-system mode in the UI.
+
 ### Cross-source duplicate dedupe in keyword stats
 - Added cross-source dedupe for keyword-stat news records in `trendradar/core/analyzer.py`.
 - Dedupe keys now prefer normalized URL signature (`get_url_signature`) and fall back to normalized title signatures.

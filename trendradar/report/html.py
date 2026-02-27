@@ -9,6 +9,8 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Callable
 
+import yaml
+
 from trendradar.report.helpers import html_escape
 from trendradar.utils.time import convert_time_for_display
 from trendradar.utils.time_display import (
@@ -36,6 +38,7 @@ def render_html_content(
     show_new_section: bool = True,
     time_display_mode: Optional[str] = None,
     show_observation_count: Optional[bool] = None,
+    theme_mode: Optional[str] = None,
 ) -> str:
     """渲染HTML内容
 
@@ -54,6 +57,7 @@ def render_html_content(
         show_new_section: 是否显示新增热点区域
         time_display_mode: 时间显示模式（hidden/observed/publish/publish_or_observed）
         show_observation_count: 是否显示出现次数（None 时按模式自动）
+        theme_mode: HTML 主题模式（light/dark/system）
 
     Returns:
         渲染后的 HTML 字符串
@@ -85,6 +89,37 @@ def render_html_content(
         )
     else:
         show_observation_count = bool(show_observation_count)
+
+    def normalize_theme_mode(value: Optional[str], default: str = "system") -> str:
+        if value is None:
+            return default
+        raw = str(value).strip().lower()
+        return raw if raw in {"light", "dark", "system"} else default
+
+    def resolve_default_theme_mode() -> str:
+        if theme_mode is not None:
+            return normalize_theme_mode(theme_mode, default="system")
+
+        env_theme_mode = os.getenv("HTML_THEME_MODE", "").strip()
+        if env_theme_mode:
+            return normalize_theme_mode(env_theme_mode, default="system")
+
+        for config_path in ("config/config.yaml", "/app/config/config.yaml"):
+            if not os.path.exists(config_path):
+                continue
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    config_data = yaml.safe_load(f) or {}
+                return normalize_theme_mode(
+                    config_data.get("display", {}).get("theme_mode"),
+                    default="system",
+                )
+            except Exception:
+                continue
+
+        return "system"
+
+    default_theme_mode = resolve_default_theme_mode()
 
     def simplify_observed_time(time_display: str) -> str:
         if not time_display:
@@ -131,38 +166,98 @@ def render_html_content(
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>热点新闻分析</title>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+        <script>
+            (() => {
+                const storageKey = 'trendradar_report_theme_mode';
+                const savedMode = localStorage.getItem(storageKey);
+                const defaultThemeMode = '""" + default_theme_mode + """';
+                const themeMode = ['light', 'dark', 'system'].includes(savedMode) ? savedMode : defaultThemeMode;
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const effectiveTheme = themeMode === 'system' ? (prefersDark ? 'dark' : 'light') : themeMode;
+
+                document.documentElement.dataset.themeMode = themeMode;
+                document.documentElement.dataset.theme = effectiveTheme;
+                document.documentElement.style.colorScheme = effectiveTheme;
+            })();
+        </script>
         <style>
             * { box-sizing: border-box; }
+            :root {
+                color-scheme: light;
+                --page-bg: #fafafa;
+                --surface-primary: #ffffff;
+                --surface-secondary: #f8fafc;
+                --surface-muted: #f3f4f6;
+                --border-default: #e5e7eb;
+                --border-soft: #f0f0f0;
+                --text-primary: #1a1a1a;
+                --text-secondary: #666666;
+                --text-muted: #999999;
+                --link-color: #2563eb;
+                --link-visited: #7c3aed;
+                --toolbar-glass: rgba(255, 255, 255, 0.18);
+                --toolbar-border: rgba(255, 255, 255, 0.28);
+                --shadow-soft: 0 2px 16px rgba(0, 0, 0, 0.06);
+            }
+
+            html[data-theme="dark"] {
+                color-scheme: dark;
+                --page-bg: #0b1220;
+                --surface-primary: #111827;
+                --surface-secondary: #172033;
+                --surface-muted: #1f2937;
+                --border-default: #334155;
+                --border-soft: #273449;
+                --text-primary: #e5eefc;
+                --text-secondary: #cbd5e1;
+                --text-muted: #94a3b8;
+                --link-color: #93c5fd;
+                --link-visited: #c4b5fd;
+                --toolbar-glass: rgba(15, 23, 42, 0.44);
+                --toolbar-border: rgba(255, 255, 255, 0.12);
+                --shadow-soft: 0 18px 40px rgba(2, 6, 23, 0.34);
+            }
+
             body {
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
                 margin: 0;
                 padding: 16px;
-                background: #fafafa;
-                color: #333;
+                background: var(--page-bg);
+                color: var(--text-primary);
                 line-height: 1.5;
+                transition: background-color 0.2s ease, color 0.2s ease;
             }
 
             .container {
                 max-width: 600px;
                 margin: 0 auto;
-                background: white;
+                background: var(--surface-primary);
                 border-radius: 12px;
                 overflow: hidden;
-                box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+                box-shadow: var(--shadow-soft);
             }
 
             .header {
                 background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
                 color: white;
-                padding: 32px 24px;
+                padding: 84px 24px 32px;
                 text-align: center;
                 position: relative;
             }
 
-            .save-buttons {
+            .header-toolbar {
                 position: absolute;
                 top: 16px;
                 right: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 8px;
+                max-width: calc(100% - 32px);
+                flex-wrap: wrap;
+            }
+
+            .save-buttons {
                 display: flex;
                 gap: 8px;
             }
@@ -179,6 +274,78 @@ def render_html_content(
                 transition: all 0.2s ease;
                 backdrop-filter: blur(10px);
                 white-space: nowrap;
+            }
+
+            .sr-only {
+                position: absolute;
+                width: 1px;
+                height: 1px;
+                padding: 0;
+                margin: -1px;
+                overflow: hidden;
+                clip: rect(0, 0, 0, 0);
+                white-space: nowrap;
+                border: 0;
+            }
+
+            .theme-controls {
+                display: inline-flex;
+                align-items: center;
+                gap: 10px;
+                padding: 8px 12px;
+                border-radius: 999px;
+                border: 1px solid var(--toolbar-border);
+                background: var(--toolbar-glass);
+                backdrop-filter: blur(14px);
+                box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+                justify-content: center;
+            }
+
+            .theme-status {
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 0.02em;
+                white-space: nowrap;
+            }
+
+            .theme-switch {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                cursor: pointer;
+                white-space: nowrap;
+            }
+
+            .theme-switch-label {
+                font-size: 12px;
+                font-weight: 600;
+                opacity: 0.92;
+            }
+
+            .theme-switch-track {
+                position: relative;
+                width: 44px;
+                height: 24px;
+                border-radius: 999px;
+                border: 1px solid var(--toolbar-border);
+                background: rgba(255, 255, 255, 0.25);
+            }
+
+            .theme-switch-thumb {
+                position: absolute;
+                top: 2px;
+                left: 2px;
+                width: 18px;
+                height: 18px;
+                border-radius: 50%;
+                background: linear-gradient(135deg, #ffffff, #dbeafe);
+                box-shadow: 0 3px 8px rgba(15, 23, 42, 0.25);
+                transition: transform 0.2s ease, background 0.2s ease;
+            }
+
+            .theme-switch input:checked + .theme-switch-thumb {
+                transform: translateX(20px);
+                background: linear-gradient(135deg, #facc15, #fb7185);
             }
 
             .save-btn:hover {
@@ -235,9 +402,9 @@ def render_html_content(
                 z-index: 5;
                 margin-bottom: 20px;
                 padding: 12px;
-                border: 1px solid #e5e7eb;
+                border: 1px solid var(--border-default);
                 border-radius: 10px;
-                background: #ffffff;
+                background: var(--surface-primary);
                 box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
             }
 
@@ -262,7 +429,7 @@ def render_html_content(
             .outline-title {
                 font-size: 13px;
                 font-weight: 600;
-                color: #4b5563;
+                color: var(--text-secondary);
             }
 
             .outline-actions {
@@ -272,9 +439,9 @@ def render_html_content(
             }
 
             .outline-action-btn {
-                border: 1px solid #d1d5db;
-                background: #f9fafb;
-                color: #4b5563;
+                border: 1px solid var(--border-default);
+                background: var(--surface-secondary);
+                color: var(--text-secondary);
                 font-size: 12px;
                 border-radius: 6px;
                 padding: 4px 8px;
@@ -311,9 +478,9 @@ def render_html_content(
                 align-items: center;
                 padding: 4px 8px;
                 border-radius: 999px;
-                border: 1px solid #e5e7eb;
-                background: #f8fafc;
-                color: #475569;
+                border: 1px solid var(--border-default);
+                background: var(--surface-secondary);
+                color: var(--text-secondary);
                 text-decoration: none;
                 font-size: 12px;
                 line-height: 1.4;
@@ -367,7 +534,7 @@ def render_html_content(
                 justify-content: space-between;
                 margin-bottom: 20px;
                 padding-bottom: 8px;
-                border-bottom: 1px solid #f0f0f0;
+                border-bottom: 1px solid var(--border-soft);
             }
 
             .fold-header {
@@ -388,7 +555,7 @@ def render_html_content(
             }
 
             .fold-toggle {
-                color: #9ca3af;
+                color: var(--text-muted);
                 font-size: 13px;
                 line-height: 1;
                 min-width: 12px;
@@ -416,11 +583,11 @@ def render_html_content(
             .word-name {
                 font-size: 17px;
                 font-weight: 600;
-                color: #1a1a1a;
+                color: var(--text-primary);
             }
 
             .word-count {
-                color: #666;
+                color: var(--text-secondary);
                 font-size: 13px;
                 font-weight: 500;
             }
@@ -429,14 +596,14 @@ def render_html_content(
             .word-count.warm { color: #ea580c; font-weight: 600; }
 
             .word-index {
-                color: #999;
+                color: var(--text-muted);
                 font-size: 12px;
             }
 
             .news-item {
                 margin-bottom: 20px;
                 padding: 16px 0;
-                border-bottom: 1px solid #f5f5f5;
+                border-bottom: 1px solid var(--border-soft);
                 position: relative;
                 display: flex;
                 gap: 12px;
@@ -462,13 +629,13 @@ def render_html_content(
             }
 
             .news-number {
-                color: #999;
+                color: var(--text-muted);
                 font-size: 13px;
                 font-weight: 600;
                 min-width: 20px;
                 text-align: center;
                 flex-shrink: 0;
-                background: #f8f9fa;
+                background: var(--surface-secondary);
                 border-radius: 50%;
                 width: 24px;
                 height: 24px;
@@ -498,7 +665,7 @@ def render_html_content(
             }
 
             .source-name {
-                color: #666;
+                color: var(--text-secondary);
                 font-size: 12px;
                 font-weight: 500;
             }
@@ -527,7 +694,7 @@ def render_html_content(
             .rank-num.high { background: #ea580c; }
 
             .time-info {
-                color: #999;
+                color: var(--text-muted);
                 font-size: 11px;
             }
 
@@ -563,12 +730,12 @@ def render_html_content(
             .news-title {
                 font-size: 15px;
                 line-height: 1.4;
-                color: #1a1a1a;
+                color: var(--text-primary);
                 margin: 0;
             }
 
             .news-link {
-                color: #2563eb;
+                color: var(--link-color);
                 text-decoration: none;
             }
 
@@ -577,14 +744,14 @@ def render_html_content(
             }
 
             .news-link:visited {
-                color: #7c3aed;
+                color: var(--link-visited);
             }
 
             /* 通用区域分割线样式 */
             .section-divider {
                 margin-top: 32px;
                 padding-top: 24px;
-                border-top: 2px solid #e5e7eb;
+                border-top: 2px solid var(--border-default);
             }
 
             /* 热榜统计区样式 */
@@ -598,7 +765,7 @@ def render_html_content(
             }
 
             .new-section-title {
-                color: #1a1a1a;
+                color: var(--text-primary);
                 font-size: 16px;
                 font-weight: 600;
                 margin: 0 0 20px 0;
@@ -609,12 +776,12 @@ def render_html_content(
             }
 
             .new-source-title {
-                color: #666;
+                color: var(--text-secondary);
                 font-size: 13px;
                 font-weight: 500;
                 margin: 0 0 12px 0;
                 padding-bottom: 6px;
-                border-bottom: 1px solid #f5f5f5;
+                border-bottom: 1px solid var(--border-soft);
             }
 
             .new-item {
@@ -622,7 +789,7 @@ def render_html_content(
                 align-items: center;
                 gap: 12px;
                 padding: 8px 0;
-                border-bottom: 1px solid #f9f9f9;
+                border-bottom: 1px solid var(--border-soft);
             }
 
             .new-item:last-child {
@@ -630,13 +797,13 @@ def render_html_content(
             }
 
             .new-item-number {
-                color: #999;
+                color: var(--text-muted);
                 font-size: 12px;
                 font-weight: 600;
                 min-width: 18px;
                 text-align: center;
                 flex-shrink: 0;
-                background: #f8f9fa;
+                background: var(--surface-secondary);
                 border-radius: 50%;
                 width: 20px;
                 height: 20px;
@@ -668,7 +835,7 @@ def render_html_content(
             .new-item-title {
                 font-size: 14px;
                 line-height: 1.4;
-                color: #1a1a1a;
+                color: var(--text-primary);
                 margin: 0;
             }
 
@@ -703,14 +870,14 @@ def render_html_content(
             .footer {
                 margin-top: 32px;
                 padding: 20px 24px;
-                background: #f8f9fa;
-                border-top: 1px solid #e5e7eb;
+                background: var(--surface-secondary);
+                border-top: 1px solid var(--border-default);
                 text-align: center;
             }
 
             .footer-content {
                 font-size: 13px;
-                color: #6b7280;
+                color: var(--text-secondary);
                 line-height: 1.6;
             }
 
@@ -728,7 +895,7 @@ def render_html_content(
 
             .project-name {
                 font-weight: 600;
-                color: #374151;
+                color: var(--text-primary);
             }
 
             @media (max-width: 480px) {
@@ -764,16 +931,27 @@ def render_html_content(
                 .new-item { gap: 8px; }
                 .news-number { width: 20px; height: 20px; font-size: 12px; }
                 .save-buttons {
-                    position: static;
-                    margin-bottom: 16px;
                     display: flex;
                     gap: 8px;
-                    justify-content: center;
                     flex-direction: column;
                     width: 100%;
                 }
                 .save-btn {
                     width: 100%;
+                }
+                .header-toolbar {
+                    position: static;
+                    margin-bottom: 16px;
+                    flex-direction: column;
+                    align-items: stretch;
+                }
+                .theme-controls {
+                    width: 100%;
+                    justify-content: center;
+                    border-radius: 16px;
+                }
+                .theme-status {
+                    text-align: center;
                 }
             }
 
@@ -797,7 +975,7 @@ def render_html_content(
             }
 
             .rss-section-count {
-                color: #6b7280;
+                color: var(--text-secondary);
                 font-size: 14px;
             }
 
@@ -825,7 +1003,7 @@ def render_html_content(
             }
 
             .feed-count {
-                color: #666;
+                color: var(--text-secondary);
                 font-size: 13px;
                 font-weight: 500;
             }
@@ -851,7 +1029,7 @@ def render_html_content(
             }
 
             .rss-time {
-                color: #6b7280;
+                color: var(--text-secondary);
                 font-size: 12px;
             }
 
@@ -868,7 +1046,7 @@ def render_html_content(
             }
 
             .rss-link {
-                color: #1f2937;
+                color: var(--text-primary);
                 text-decoration: none;
                 font-weight: 500;
             }
@@ -880,7 +1058,7 @@ def render_html_content(
 
             .rss-summary {
                 font-size: 13px;
-                color: #6b7280;
+                color: var(--text-secondary);
                 line-height: 1.5;
                 margin: 0;
                 display: -webkit-box;
@@ -909,7 +1087,7 @@ def render_html_content(
             }
 
             .standalone-section-count {
-                color: #6b7280;
+                color: var(--text-secondary);
                 font-size: 14px;
             }
 
@@ -927,17 +1105,17 @@ def render_html_content(
                 justify-content: space-between;
                 margin-bottom: 20px;
                 padding-bottom: 8px;
-                border-bottom: 1px solid #f0f0f0;
+                border-bottom: 1px solid var(--border-soft);
             }
 
             .standalone-name {
                 font-size: 17px;
                 font-weight: 600;
-                color: #1a1a1a;
+                color: var(--text-primary);
             }
 
             .standalone-count {
-                color: #666;
+                color: var(--text-secondary);
                 font-size: 13px;
                 font-weight: 500;
             }
@@ -976,7 +1154,7 @@ def render_html_content(
             .ai-block {
                 margin-bottom: 16px;
                 padding: 16px;
-                background: white;
+                background: var(--surface-primary);
                 border-radius: 8px;
                 box-shadow: 0 1px 3px rgba(0,0,0,0.05);
             }
@@ -995,7 +1173,7 @@ def render_html_content(
             .ai-block-content {
                 font-size: 14px;
                 line-height: 1.6;
-                color: #334155;
+                color: var(--text-secondary);
                 white-space: pre-wrap;
             }
 
@@ -1007,14 +1185,71 @@ def render_html_content(
                 color: #991b1b;
                 font-size: 14px;
             }
+
+            html[data-theme="dark"] .outline-panel {
+                box-shadow: 0 10px 30px rgba(2, 6, 23, 0.28);
+            }
+
+            html[data-theme="dark"] .outline-action-btn:hover {
+                background: #243244;
+                border-color: #64748b;
+            }
+
+            html[data-theme="dark"] .outline-link:hover {
+                background: rgba(96, 165, 250, 0.12);
+                border-color: rgba(96, 165, 250, 0.35);
+                color: #bfdbfe;
+            }
+
+            html[data-theme="dark"] .outline-link.active {
+                background: rgba(59, 130, 246, 0.22);
+                border-color: rgba(96, 165, 250, 0.45);
+                color: #dbeafe;
+            }
+
+            html[data-theme="dark"] .keyword-tag {
+                color: #bfdbfe;
+                background: rgba(59, 130, 246, 0.16);
+            }
+
+            html[data-theme="dark"] .trend-info.flat {
+                color: #cbd5e1;
+                background: #334155;
+            }
+
+            html[data-theme="dark"] .rss-item {
+                background: rgba(16, 185, 129, 0.12);
+            }
+
+            html[data-theme="dark"] .ai-section {
+                background: linear-gradient(135deg, rgba(2, 132, 199, 0.2) 0%, rgba(14, 165, 233, 0.12) 100%);
+                border-color: rgba(125, 211, 252, 0.28);
+            }
+
+            html[data-theme="dark"] .theme-switch-track {
+                background: rgba(15, 23, 42, 0.45);
+            }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
-                <div class="save-buttons">
-                    <button class="save-btn" onclick="saveAsImage()">保存为图片</button>
-                    <button class="save-btn" onclick="saveAsMultipleImages()">分段保存</button>
+                <div class="header-toolbar">
+                    <div class="theme-controls" aria-label="主题设置">
+                        <div class="theme-status" id="theme-status" role="status" aria-live="polite">跟随系统</div>
+                        <label class="theme-switch" for="theme-toggle" title="切换浅色 / 深色">
+                            <span class="theme-switch-label">浅</span>
+                            <span class="theme-switch-track">
+                                <input type="checkbox" id="theme-toggle" class="sr-only" aria-label="切换深色模式">
+                                <span class="theme-switch-thumb"></span>
+                            </span>
+                            <span class="theme-switch-label">深</span>
+                        </label>
+                    </div>
+                    <div class="save-buttons">
+                        <button class="save-btn" onclick="saveAsImage()">保存为图片</button>
+                        <button class="save-btn" onclick="saveAsMultipleImages()">分段保存</button>
+                    </div>
                 </div>
                 <div class="header-title">热点新闻分析</div>
                 <div class="header-info">
@@ -1751,8 +1986,76 @@ def render_html_content(
         </div>
 
         <script>
+            const DEFAULT_THEME_MODE = '""" + default_theme_mode + """';
+            const THEME_STORAGE_KEY = 'trendradar_report_theme_mode';
+            const systemThemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
             let foldableSections = [];
             let outlineObserver = null;
+
+            function getStoredThemeMode() {
+                const savedMode = localStorage.getItem(THEME_STORAGE_KEY);
+                return ['light', 'dark', 'system'].includes(savedMode) ? savedMode : DEFAULT_THEME_MODE;
+            }
+
+            function resolveEffectiveTheme(mode = getStoredThemeMode()) {
+                if (mode === 'system') {
+                    return systemThemeMedia.matches ? 'dark' : 'light';
+                }
+                return mode;
+            }
+
+            function updateThemeControls() {
+                const themeMode = getStoredThemeMode();
+                const effectiveTheme = resolveEffectiveTheme(themeMode);
+                const themeToggle = document.getElementById('theme-toggle');
+                const themeStatus = document.getElementById('theme-status');
+
+                if (themeToggle) {
+                    themeToggle.checked = effectiveTheme === 'dark';
+                }
+
+                if (themeStatus) {
+                    themeStatus.textContent = `${themeMode === 'system' ? '跟随系统' : '手动'} · ${effectiveTheme === 'dark' ? '深色' : '浅色'}`;
+                }
+            }
+
+            function applyTheme(mode, { persist = true } = {}) {
+                const normalizedMode = ['light', 'dark', 'system'].includes(mode) ? mode : 'system';
+                const effectiveTheme = resolveEffectiveTheme(normalizedMode);
+
+                if (persist) {
+                    localStorage.setItem(THEME_STORAGE_KEY, normalizedMode);
+                }
+
+                document.documentElement.dataset.themeMode = normalizedMode;
+                document.documentElement.dataset.theme = effectiveTheme;
+                document.documentElement.style.colorScheme = effectiveTheme;
+                updateThemeControls();
+            }
+
+            function initThemeControls() {
+                const themeToggle = document.getElementById('theme-toggle');
+
+                if (themeToggle) {
+                    themeToggle.addEventListener('change', event => {
+                        applyTheme(event.target.checked ? 'dark' : 'light');
+                    });
+                }
+
+                const handleSystemThemeChange = () => {
+                    if (getStoredThemeMode() === 'system') {
+                        applyTheme('system', { persist: false });
+                    }
+                };
+
+                if (typeof systemThemeMedia.addEventListener === 'function') {
+                    systemThemeMedia.addEventListener('change', handleSystemThemeChange);
+                } else if (typeof systemThemeMedia.addListener === 'function') {
+                    systemThemeMedia.addListener(handleSystemThemeChange);
+                }
+
+                applyTheme(getStoredThemeMode(), { persist: false });
+            }
 
             function setSectionCollapsed(section, collapsed) {
                 if (!section) return;
@@ -1939,18 +2242,23 @@ def render_html_content(
                     // 截图前隐藏按钮
                     const buttons = document.querySelector('.save-buttons');
                     const outlinePanel = document.querySelector('.outline-panel');
+                    const headerToolbar = document.querySelector('.header-toolbar');
                     buttons.style.visibility = 'hidden';
                     if (outlinePanel) {
                         outlinePanel.style.visibility = 'hidden';
+                    }
+                    if (headerToolbar) {
+                        headerToolbar.style.visibility = 'hidden';
                     }
 
                     // 再次等待确保按钮完全隐藏
                     await new Promise(resolve => setTimeout(resolve, 100));
 
                     const container = document.querySelector('.container');
+                    const captureBackground = getComputedStyle(container).backgroundColor || '#ffffff';
 
                     const canvas = await html2canvas(container, {
-                        backgroundColor: '#ffffff',
+                        backgroundColor: captureBackground,
                         scale: 1.5,
                         useCORS: true,
                         allowTaint: false,
@@ -1971,6 +2279,9 @@ def render_html_content(
                     buttons.style.visibility = 'visible';
                     if (outlinePanel) {
                         outlinePanel.style.visibility = 'visible';
+                    }
+                    if (headerToolbar) {
+                        headerToolbar.style.visibility = 'visible';
                     }
 
                     const link = document.createElement('a');
@@ -2015,6 +2326,8 @@ def render_html_content(
                 const scale = 1.5;
                 const maxHeight = 5000 / scale;
                 const foldStateSnapshot = getFoldStateSnapshot();
+                const headerToolbar = document.querySelector('.header-toolbar');
+                const captureBackground = getComputedStyle(container).backgroundColor || '#ffffff';
                 setAllFoldState(false);
 
                 try {
@@ -2153,6 +2466,9 @@ def render_html_content(
                     if (outlinePanel) {
                         outlinePanel.style.visibility = 'hidden';
                     }
+                    if (headerToolbar) {
+                        headerToolbar.style.visibility = 'hidden';
+                    }
 
                     // 为每个分段生成图片
                     const images = [];
@@ -2167,17 +2483,17 @@ def render_html_content(
                             left: -9999px;
                             top: 0;
                             width: ${container.offsetWidth}px;
-                            background: white;
+                            background: ${captureBackground};
                         `;
                         tempContainer.className = 'container';
 
                         // 克隆容器内容
                         const clonedContainer = container.cloneNode(true);
 
-                        // 移除克隆内容中的保存按钮
-                        const clonedButtons = clonedContainer.querySelector('.save-buttons');
-                        if (clonedButtons) {
-                            clonedButtons.style.display = 'none';
+                        // 移除克隆内容中的工具栏
+                        const clonedToolbar = clonedContainer.querySelector('.header-toolbar');
+                        if (clonedToolbar) {
+                            clonedToolbar.style.display = 'none';
                         }
                         const clonedOutline = clonedContainer.querySelector('.outline-panel');
                         if (clonedOutline) {
@@ -2192,7 +2508,7 @@ def render_html_content(
 
                         // 使用html2canvas截取特定区域
                         const canvas = await html2canvas(clonedContainer, {
-                            backgroundColor: '#ffffff',
+                            backgroundColor: captureBackground,
                             scale: scale,
                             useCORS: true,
                             allowTaint: false,
@@ -2216,6 +2532,9 @@ def render_html_content(
                     buttons.style.visibility = 'visible';
                     if (outlinePanel) {
                         outlinePanel.style.visibility = 'visible';
+                    }
+                    if (headerToolbar) {
+                        headerToolbar.style.visibility = 'visible';
                     }
 
                     // 下载所有图片
@@ -2244,6 +2563,10 @@ def render_html_content(
                     console.error('分段保存失败:', error);
                     const buttons = document.querySelector('.save-buttons');
                     buttons.style.visibility = 'visible';
+                    const headerToolbar = document.querySelector('.header-toolbar');
+                    if (headerToolbar) {
+                        headerToolbar.style.visibility = 'visible';
+                    }
                     const outlinePanel = document.querySelector('.outline-panel');
                     if (outlinePanel) {
                         outlinePanel.style.visibility = 'visible';
@@ -2260,6 +2583,7 @@ def render_html_content(
 
             document.addEventListener('DOMContentLoaded', function() {
                 window.scrollTo(0, 0);
+                initThemeControls();
                 initFoldableSections();
                 buildOutline();
                 bindOutlineActions();

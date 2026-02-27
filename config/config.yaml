@@ -223,6 +223,12 @@ display:
   # false: 隐藏
   show_observation_count: true
 
+  # HTML 报告主题模式
+  # - system: 跟随系统
+  # - light: 固定浅色
+  # - dark: 固定深色
+  theme_mode: "system"
+
   # 发布时间补全（仅在 time_display_mode 包含 publish 时生效）
   # 作用：当平台接口未直接返回发布时间时，按 URL 抓取页面元信息进行补全
   publish_time_enrich:

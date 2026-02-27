@@ -245,6 +245,13 @@ def _load_display_config(config_data: Dict) -> Dict:
         if isinstance(show_count_yaml, bool):
             show_observation_count = show_count_yaml
 
+    theme_mode = None
+    theme_mode_env = _get_env_str("HTML_THEME_MODE")
+    theme_mode_yaml = display.get("theme_mode")
+    raw_theme_mode = theme_mode_env or theme_mode_yaml
+    if raw_theme_mode is not None and str(raw_theme_mode).strip().lower() in {"light", "dark", "system"}:
+        theme_mode = str(raw_theme_mode).strip().lower()
+
     # 默认区域顺序
     default_region_order = ["hotlist", "rss", "new_items", "standalone", "ai_analysis"]
     region_order = display.get("region_order", default_region_order)
@@ -300,6 +307,7 @@ def _load_display_config(config_data: Dict) -> Dict:
         # 列表时间显示策略
         "TIME_DISPLAY_MODE": time_display_mode,
         "SHOW_OBSERVATION_COUNT": show_observation_count,
+        "THEME_MODE": theme_mode,
         "PUBLISH_TIME_ENRICH": {
             "ENABLED": bool(enrich_enabled),
             "MAX_FETCH_PER_RUN": max(0, enrich_max_fetch),

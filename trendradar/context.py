@@ -132,6 +132,11 @@ class AppContext:
         return self.config.get("DISPLAY", {}).get("SHOW_OBSERVATION_COUNT")
 
     @property
+    def theme_mode(self) -> Optional[str]:
+        """HTML 报告主题模式 (light | dark | system)"""
+        return self.config.get("DISPLAY", {}).get("THEME_MODE")
+
+    @property
     def show_new_section(self) -> bool:
         """是否显示新增热点区域"""
         return self.config.get("DISPLAY", {}).get("REGIONS", {}).get("NEW_ITEMS", True)
@@ -349,6 +354,7 @@ class AppContext:
             display_mode=self.display_mode,
             time_display_mode=self.time_display_mode,
             show_observation_count=self.show_observation_count,
+            theme_mode=self.theme_mode,
             ai_analysis=ai_analysis,
             show_new_section=self.show_new_section,
             standalone_data=standalone_data,
