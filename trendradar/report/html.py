@@ -169,11 +169,18 @@ def render_html_content(
         <script>
             (() => {
                 const storageKey = 'trendradar_report_theme_mode';
-                const savedMode = localStorage.getItem(storageKey);
                 const defaultThemeMode = '""" + default_theme_mode + """';
-                const themeMode = ['light', 'dark', 'system'].includes(savedMode) ? savedMode : defaultThemeMode;
+                const forceSystemTheme = defaultThemeMode === 'system';
+                const savedMode = forceSystemTheme ? null : localStorage.getItem(storageKey);
+                const themeMode = forceSystemTheme
+                    ? 'system'
+                    : (['light', 'dark', 'system'].includes(savedMode) ? savedMode : defaultThemeMode);
                 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
                 const effectiveTheme = themeMode === 'system' ? (prefersDark ? 'dark' : 'light') : themeMode;
+
+                if (forceSystemTheme) {
+                    localStorage.removeItem(storageKey);
+                }
 
                 document.documentElement.dataset.themeMode = themeMode;
                 document.documentElement.dataset.theme = effectiveTheme;
@@ -314,6 +321,11 @@ def render_html_content(
                 gap: 8px;
                 cursor: pointer;
                 white-space: nowrap;
+            }
+
+            .theme-switch.is-disabled {
+                cursor: not-allowed;
+                opacity: 0.72;
             }
 
             .theme-switch-label {
@@ -1987,12 +1999,16 @@ def render_html_content(
 
         <script>
             const DEFAULT_THEME_MODE = '""" + default_theme_mode + """';
+            const FORCE_SYSTEM_THEME = DEFAULT_THEME_MODE === 'system';
             const THEME_STORAGE_KEY = 'trendradar_report_theme_mode';
             const systemThemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
             let foldableSections = [];
             let outlineObserver = null;
 
             function getStoredThemeMode() {
+                if (FORCE_SYSTEM_THEME) {
+                    return 'system';
+                }
                 const savedMode = localStorage.getItem(THEME_STORAGE_KEY);
                 return ['light', 'dark', 'system'].includes(savedMode) ? savedMode : DEFAULT_THEME_MODE;
             }
@@ -2012,6 +2028,12 @@ def render_html_content(
 
                 if (themeToggle) {
                     themeToggle.checked = effectiveTheme === 'dark';
+                    themeToggle.disabled = FORCE_SYSTEM_THEME;
+                    const themeSwitch = themeToggle.closest('.theme-switch');
+                    if (themeSwitch) {
+                        themeSwitch.classList.toggle('is-disabled', FORCE_SYSTEM_THEME);
+                        themeSwitch.title = FORCE_SYSTEM_THEME ? '已锁定跟随系统' : '切换浅色 / 深色';
+                    }
                 }
 
                 if (themeStatus) {
@@ -2020,10 +2042,15 @@ def render_html_content(
             }
 
             function applyTheme(mode, { persist = true } = {}) {
-                const normalizedMode = ['light', 'dark', 'system'].includes(mode) ? mode : 'system';
+                let normalizedMode = ['light', 'dark', 'system'].includes(mode) ? mode : 'system';
+                if (FORCE_SYSTEM_THEME) {
+                    normalizedMode = 'system';
+                }
                 const effectiveTheme = resolveEffectiveTheme(normalizedMode);
 
-                if (persist) {
+                if (FORCE_SYSTEM_THEME) {
+                    localStorage.removeItem(THEME_STORAGE_KEY);
+                } else if (persist) {
                     localStorage.setItem(THEME_STORAGE_KEY, normalizedMode);
                 }
 
@@ -2038,6 +2065,10 @@ def render_html_content(
 
                 if (themeToggle) {
                     themeToggle.addEventListener('change', event => {
+                        if (FORCE_SYSTEM_THEME) {
+                            applyTheme('system', { persist: false });
+                            return;
+                        }
                         applyTheme(event.target.checked ? 'dark' : 'light');
                     });
                 }
