@@ -104,6 +104,7 @@ const STORAGE_KEY_TIMELINE = 'trendradar_timeline_yaml';
 const STORAGE_KEY_CONFIG_TIME = 'trendradar_config_time';
 const STORAGE_KEY_FREQUENCY_TIME = 'trendradar_frequency_time';
 const STORAGE_KEY_TIMELINE_TIME = 'trendradar_timeline_time';
+const STORAGE_KEY_THEME_MODE = 'trendradar_ui_theme_mode';
 
 // 官网配置文件 URL
 const REMOTE_CONFIG_URL = 'https://raw.githubusercontent.com/sansan0/TrendRadar/refs/heads/master/config/config.yaml';
@@ -116,6 +117,98 @@ let currentFrequency = "";
 let currentTimeline = "";
 let currentFrequencyData = null;  // 缓存解析后的数据，避免重复解析导致索引错位
 let currentTab = "config";
+let themeMode = getStoredThemeMode();
+const systemThemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+
+function getStoredThemeMode() {
+    const savedMode = localStorage.getItem(STORAGE_KEY_THEME_MODE);
+    return ['light', 'dark', 'system'].includes(savedMode) ? savedMode : 'system';
+}
+
+function resolveEffectiveTheme(mode = themeMode) {
+    if (mode === 'system') {
+        return systemThemeMedia.matches ? 'dark' : 'light';
+    }
+    return mode;
+}
+
+function updateThemeControls() {
+    const themeToggle = document.getElementById('theme-toggle');
+    const systemToggle = document.getElementById('theme-system-toggle');
+    const status = document.getElementById('theme-status');
+    const effectiveTheme = resolveEffectiveTheme();
+    const followsSystem = themeMode === 'system';
+
+    if (themeToggle) {
+        themeToggle.checked = effectiveTheme === 'dark';
+        themeToggle.setAttribute('aria-checked', effectiveTheme === 'dark' ? 'true' : 'false');
+    }
+
+    if (systemToggle) {
+        systemToggle.checked = followsSystem;
+    }
+
+    if (status) {
+        status.textContent = `${effectiveTheme === 'dark' ? '深色' : '浅色'} · ${followsSystem ? '跟随系统' : '手动'}`;
+    }
+}
+
+function applyTheme(mode, { persist = true } = {}) {
+    themeMode = ['light', 'dark', 'system'].includes(mode) ? mode : 'system';
+
+    if (persist) {
+        localStorage.setItem(STORAGE_KEY_THEME_MODE, themeMode);
+    }
+
+    const effectiveTheme = resolveEffectiveTheme();
+    document.documentElement.dataset.themeMode = themeMode;
+    document.documentElement.dataset.theme = effectiveTheme;
+    document.documentElement.style.colorScheme = effectiveTheme;
+
+    updateThemeControls();
+}
+
+function handleThemeToggleChange(event) {
+    applyTheme(event.target.checked ? 'dark' : 'light');
+}
+
+function handleThemeSystemToggleChange(event) {
+    if (event.target.checked) {
+        applyTheme('system');
+        return;
+    }
+
+    applyTheme(resolveEffectiveTheme());
+}
+
+function initThemeControls() {
+    const themeToggle = document.getElementById('theme-toggle');
+    const systemToggle = document.getElementById('theme-system-toggle');
+
+    if (themeToggle) {
+        themeToggle.addEventListener('change', handleThemeToggleChange);
+    }
+
+    if (systemToggle) {
+        systemToggle.addEventListener('change', handleThemeSystemToggleChange);
+    }
+
+    if (typeof systemThemeMedia.addEventListener === 'function') {
+        systemThemeMedia.addEventListener('change', () => {
+            if (themeMode === 'system') {
+                applyTheme('system', { persist: false });
+            }
+        });
+    } else if (typeof systemThemeMedia.addListener === 'function') {
+        systemThemeMedia.addListener(() => {
+            if (themeMode === 'system') {
+                applyTheme('system', { persist: false });
+            }
+        });
+    }
+
+    applyTheme(themeMode, { persist: false });
+}
 
 // ==========================================
 // 2. 初始化与事件绑定
@@ -126,6 +219,8 @@ let frequencySaveTimer = null;
 let timelineSaveTimer = null;
 
 document.addEventListener('DOMContentLoaded', () => {
+    initThemeControls();
+
     const yamlEditor = document.getElementById('yaml-editor');
     const frequencyEditor = document.getElementById('frequency-editor');
 
