@@ -719,7 +719,7 @@ def render_html_content(
                 position: relative;
                 display: flex;
                 gap: 12px;
-                align-items: center;
+                align-items: flex-start;
             }
 
             .news-item:last-child {
@@ -789,6 +789,10 @@ def render_html_content(
                 flex: 1;
                 min-width: 0;
                 padding-right: 40px;
+                display: grid;
+                grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
+                column-gap: 18px;
+                align-items: start;
             }
 
             .news-item.new .news-content {
@@ -799,8 +803,10 @@ def render_html_content(
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                margin-bottom: 8px;
                 flex-wrap: wrap;
+                align-content: flex-start;
+                min-width: 0;
+                padding-top: 2px;
             }
 
             .source-name {
@@ -871,11 +877,16 @@ def render_html_content(
                 line-height: 1.4;
                 color: var(--text-primary);
                 margin: 0;
+                min-width: 0;
+                text-align: left;
             }
 
             .news-link {
                 color: var(--link-color);
                 text-decoration: none;
+                display: block;
+                font-weight: 600;
+                word-break: break-word;
             }
 
             .news-link:hover {
@@ -1065,7 +1076,11 @@ def render_html_content(
                 }
                 .header-info { grid-template-columns: 1fr; gap: 12px; }
                 .news-header { gap: 6px; }
-                .news-content { padding-right: 45px; }
+                .news-content {
+                    padding-right: 45px;
+                    grid-template-columns: 1fr;
+                    row-gap: 8px;
+                }
                 .news-item { gap: 8px; }
                 .new-item { gap: 8px; }
                 .news-number { width: 20px; height: 20px; font-size: 12px; }
