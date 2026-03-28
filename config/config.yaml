@@ -63,6 +63,8 @@ platforms:
       name: "bilibili 热搜"
     - id: "cls-hot"
       name: "财联社热门"
+    - id: "cls-telegraph"
+      name: "财联社电报"
     - id: "ifeng"
       name: "凤凰网"
     - id: "weibo"
@@ -77,6 +79,8 @@ platforms:
       name: "雪球热门股票"
     - id: "36kr-quick"
       name: "36氪快讯"
+    - id: "ithome"
+      name: "IT之家"
     - id: "v2ex-share"
       name: "V2EX 最新分享"
     - id: "sspai"
@@ -95,6 +99,8 @@ platforms:
       name: "Hacker News"
     - id: "github-trending-today"
       name: "Github Today"
+    - id: "producthunt"
+      name: "Product Hunt"
 
 
 
@@ -144,6 +150,14 @@ rss:
       name: "雅虎财经"
       url: "https://finance.yahoo.com/news/rssindex"
       enabled: false                  # 禁用
+
+    - id: "openai-news"
+      name: "OpenAI News"
+      url: "https://openai.com/news/rss.xml"
+
+    - id: "github-changelog"
+      name: "GitHub Changelog"
+      url: "https://github.blog/changelog/feed/"
 
     # 自定义源示例
     # - id: "custom-feed"
