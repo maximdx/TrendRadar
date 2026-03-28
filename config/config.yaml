@@ -55,10 +55,6 @@ schedule:
 platforms:
   enabled: true                         # 是否启用热榜平台抓取
   sources:
-    - id: "toutiao"
-      name: "今日头条"
-    - id: "baidu"
-      name: "百度热搜"
     - id: "wallstreetcn-hot"
       name: "华尔街见闻"
     - id: "thepaper"
@@ -69,14 +65,36 @@ platforms:
       name: "财联社热门"
     - id: "ifeng"
       name: "凤凰网"
-    - id: "tieba"
-      name: "贴吧"
     - id: "weibo"
       name: "微博"
     - id: "douyin"
       name: "抖音"
     - id: "zhihu"
       name: "知乎"
+    - id: "nowcoder"
+      name: "牛客"
+    - id: "xueqiu-hotstock"
+      name: "雪球热门股票"
+    - id: "36kr-quick"
+      name: "36氪快讯"
+    - id: "v2ex-share"
+      name: "V2EX 最新分享"
+    - id: "sspai"
+      name: "少数派"
+    - id: "v2ex"
+      name: "V2EX"
+    - id: "zaobao"
+      name: "联合早报"
+    - id: "jin10"
+      name: "金十数据"
+    - id: "juejin"
+      name: "稀土掘金"
+    - id: "cankaoxiaoxi"
+      name: "参考消息"
+    - id: "hackernews"
+      name: "Hacker News"
+    - id: "github-trending-today"
+      name: "Github Today"
 
 
 
@@ -104,7 +122,7 @@ rss:
   freshness_filter:
     enabled: true                     # 是否启用新鲜度过滤（默认启用）
 
-    max_age_days: 1                   # 最大文章年龄（天）
+    max_age_days: 14                  # 最大文章年龄（天）
                                       # - 正整数：只推送 N 天内的文章
                                       # - 0：禁用过滤，推送所有文章
 
@@ -119,13 +137,13 @@ rss:
 
     - id: "ruanyifeng"
       name: "阮一峰的网络日志"
-      url: "http://www.ruanyifeng.com/blog/atom.xml"
-      enabled: false                  # 禁用
-      # max_age_days: 3               # 示例：推送 3 天内的文章（更新较慢的博客）
+      url: "https://feeds.feedburner.com/ruanyifeng"
+      # max_age_days: 7               # 示例：推送7天内的文章（更新较慢的博客）
      
     - id: "yahoo-finance"
       name: "雅虎财经"
       url: "https://finance.yahoo.com/news/rssindex"
+      enabled: false                  # 禁用
 
     # 自定义源示例
     # - id: "custom-feed"
@@ -164,7 +182,7 @@ report:
 
   rank_threshold: 5                   # 排名高亮阈值（影响展示强调，不改变抓取范围）
 
-  max_news_per_keyword: 0             # 每个关键词/标签最大显示数量（0=不限制，仅影响展示裁剪）
+  max_news_per_keyword: 15            # 每个关键词/标签最大显示数量（0=不限制，仅影响展示裁剪）
 
 
 # ===============================================================
@@ -178,7 +196,7 @@ report:
 # 5) 这里决定“筛选路径”，不决定 AI 模型（模型在 ai 段）
 # ===============================================================
 filter:
-  method: "ai"                     # 可选: keyword | ai
+  method: "keyword"                # 可选: keyword | ai
 
   # AI 模式标签排序开关（仅 ai 模式生效）
   # true: 按标签优先级排序（来自兴趣描述提取顺序）
@@ -400,13 +418,13 @@ storage:
   # 本地存储配置
   local:
     data_dir: "output"                # 数据目录
-    retention_days: 0                 # 保留天数（0=永久保留）
+    retention_days: 14                # 保留天数（0=永久保留）
 
   # 远程存储配置（S3 兼容协议）
   # 支持: Cloudflare R2, 阿里云 OSS, 腾讯云 COS, AWS S3, MinIO 等
   # 建议将敏感信息配置在 GitHub Secrets 或环境变量中
   remote:
-    retention_days: 0                 # 保留天数（0=永久保留）
+    retention_days: 14                # 保留天数（0=永久保留）
 
     # S3 兼容配置（或使用环境变量 S3_ENDPOINT_URL 等）
     endpoint_url: ""                  # 服务端点
