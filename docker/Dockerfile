@@ -9,7 +9,15 @@ ENV SUPERCRONIC_VERSION=v0.2.39
 RUN set -ex && \
     apt-get update && \
     apt-get install -y --no-install-recommends curl ca-certificates && \
-    case ${TARGETARCH} in \
+    ARCH="${TARGETARCH:-}" && \
+    if [ -z "${ARCH}" ]; then \
+        case "$(uname -m)" in \
+        x86_64) ARCH=amd64 ;; \
+        aarch64|arm64) ARCH=arm64 ;; \
+        *) echo "Unsupported architecture from uname -m: $(uname -m)"; exit 1 ;; \
+        esac; \
+    fi && \
+    case ${ARCH} in \
     amd64) \
     export SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-amd64; \
     export SUPERCRONIC_SHA1SUM=c98bbf82c5f648aaac8708c182cc83046fe48423; \
@@ -21,11 +29,11 @@ RUN set -ex && \
     export SUPERCRONIC=supercronic-linux-arm64; \
     ;; \
     *) \
-    echo "Unsupported architecture: ${TARGETARCH}"; \
+    echo "Unsupported architecture: ${ARCH}"; \
     exit 1; \
     ;; \
     esac && \
-    echo "Downloading supercronic for ${TARGETARCH} from ${SUPERCRONIC_URL}" && \
+    echo "Downloading supercronic for ${ARCH} from ${SUPERCRONIC_URL}" && \
     # 重试机制：最多3次，每次超时30秒
     for i in 1 2 3; do \
         echo "Download attempt $i/3"; \
@@ -55,14 +63,12 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # 先安装依赖（利用 Docker 层缓存）
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-install-project --no-dev
+RUN uv sync --locked --no-install-project --no-dev
 
 # 再复制项目代码并安装项目本身
 COPY docker/manage.py .
 COPY trendradar/ ./trendradar/
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev
+RUN uv sync --locked --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"
 
