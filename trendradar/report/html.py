@@ -250,6 +250,25 @@ def render_html_content(
                 padding: 84px 24px 32px;
                 text-align: center;
                 position: relative;
+                overflow: hidden;
+            }
+
+            .header-watermark {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                font-size: clamp(40px, 8vw, 80px);
+                font-weight: 900;
+                letter-spacing: 0.05em;
+                color: rgba(255, 255, 255, 0.15);
+                pointer-events: none;
+                z-index: 1;
+                white-space: nowrap;
+                -webkit-mask-image: radial-gradient(circle 0px at 50% 50%, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+                mask-image: radial-gradient(circle 0px at 50% 50%, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%);
+                transition: -webkit-mask-image 0.3s ease, mask-image 0.3s ease;
+                user-select: none;
             }
 
             .header-toolbar {
@@ -267,20 +286,28 @@ def render_html_content(
             .save-buttons {
                 display: flex;
                 gap: 8px;
+                z-index: 10;
+            }
+
+            .save-btn-group {
+                position: relative;
+                display: flex;
             }
 
             .save-btn {
                 background: rgba(255, 255, 255, 0.2);
                 border: 1px solid rgba(255, 255, 255, 0.3);
                 color: white;
-                padding: 8px 16px;
-                border-radius: 6px;
+                padding: 10px 18px;
+                border-radius: 6px 0 0 6px;
                 cursor: pointer;
                 font-size: 13px;
                 font-weight: 500;
                 transition: all 0.2s ease;
                 backdrop-filter: blur(10px);
                 white-space: nowrap;
+                min-height: 38px;
+                border-right: none;
             }
 
             .sr-only {
@@ -362,8 +389,6 @@ def render_html_content(
 
             .save-btn:hover {
                 background: rgba(255, 255, 255, 0.3);
-                border-color: rgba(255, 255, 255, 0.5);
-                transform: translateY(-1px);
             }
 
             .save-btn:active {
@@ -375,13 +400,88 @@ def render_html_content(
                 cursor: not-allowed;
             }
 
+            .save-dropdown-trigger {
+                background: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                color: white;
+                padding: 10px 10px;
+                border-radius: 0 6px 6px 0;
+                cursor: pointer;
+                font-size: 11px;
+                transition: all 0.2s ease;
+                backdrop-filter: blur(10px);
+                min-height: 38px;
+                display: flex;
+                align-items: center;
+            }
+
+            .save-dropdown-trigger:hover {
+                background: rgba(255, 255, 255, 0.35);
+            }
+
+            .save-dropdown-menu {
+                position: absolute;
+                top: 100%;
+                right: 0;
+                margin-top: 4px;
+                background: rgba(30, 30, 50, 0.92);
+                backdrop-filter: blur(16px);
+                border: 1px solid rgba(255, 255, 255, 0.15);
+                border-radius: 8px;
+                padding: 4px;
+                min-width: 140px;
+                opacity: 0;
+                visibility: hidden;
+                transform: translateY(-4px);
+                transition: all 0.2s ease;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            }
+
+            .save-btn-group:hover .save-dropdown-menu,
+            .save-dropdown-menu:hover {
+                opacity: 1;
+                visibility: visible;
+                transform: translateY(0);
+            }
+
+            .save-dropdown-item {
+                display: block;
+                width: 100%;
+                padding: 9px 14px;
+                background: none;
+                border: none;
+                color: white;
+                font-size: 13px;
+                cursor: pointer;
+                border-radius: 5px;
+                text-align: left;
+                transition: background 0.15s;
+                white-space: nowrap;
+            }
+
+            .save-dropdown-item:hover {
+                background: rgba(255, 255, 255, 0.15);
+            }
+
+            .dropdown-icon {
+                width: 14px;
+                height: 14px;
+                margin-right: 8px;
+                vertical-align: -2px;
+                flex-shrink: 0;
+            }
+
             .header-title {
                 font-size: 22px;
                 font-weight: 700;
                 margin: 0 0 20px 0;
+                position: relative;
+                z-index: 2;
             }
 
             .header-info {
+                position: relative;
+                z-index: 2;
                 display: grid;
                 grid-template-columns: 1fr 1fr;
                 gap: 16px;
@@ -656,6 +756,33 @@ def render_html_content(
                 justify-content: center;
                 align-self: flex-start;
                 margin-top: 8px;
+                position: relative;
+                cursor: pointer;
+                transition: background 0.15s, color 0.15s;
+            }
+            .news-number .num-text { transition: opacity 0.15s; }
+            .news-number .copy-icon {
+                position: absolute;
+                opacity: 0;
+                transition: opacity 0.15s;
+            }
+            .news-item:hover .news-number .num-text { opacity: 0; }
+            .news-item:hover .news-number .copy-icon { opacity: 1; }
+            .news-item:hover .news-number {
+                background: #eef2ff;
+                color: #4f46e5;
+            }
+            .news-number.copied {
+                background: #dcfce7 !important;
+            }
+            .news-number.copied .num-text { opacity: 0 !important; }
+            .news-number.copied .copy-icon { opacity: 1 !important; }
+            body.dark-mode .news-item:hover .news-number {
+                background: #2a2a5a;
+                color: #8ab4f8;
+            }
+            body.dark-mode .news-number.copied {
+                background: #14532d !important;
             }
 
             .news-content {
@@ -946,10 +1073,15 @@ def render_html_content(
                     display: flex;
                     gap: 8px;
                     flex-direction: column;
+                    justify-content: center;
                     width: 100%;
+                }
+                .save-btn-group {
+                    flex: 1;
                 }
                 .save-btn {
                     width: 100%;
+                    border-radius: 6px 0 0 6px;
                 }
                 .header-toolbar {
                     position: static;
@@ -1241,11 +1373,389 @@ def render_html_content(
             html[data-theme="dark"] .theme-switch-track {
                 background: rgba(15, 23, 42, 0.45);
             }
+
+            .ai-info {
+                padding: 16px;
+                background: #f0f9ff;
+                border: 1px solid #bae6fd;
+                border-radius: 8px;
+                color: #0369a1;
+                font-size: 14px;
+            }
+
+            /* ===== 浏览器增强样式（渐进增强，邮件客户端无影响） ===== */
+
+            /* 宽屏模式 - 基础 */
+            body.wide-mode .container { max-width: 1200px; }
+            body.wide-mode .header-info { grid-template-columns: repeat(4, 1fr); }
+            body.wide-mode .content { padding: 32px 40px; }
+
+            /* 宽屏模式 - RSS feed-group 两列 */
+            body.wide-mode .rss-feeds-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 24px;
+            }
+            body.wide-mode .feed-group { margin-bottom: 0; }
+
+            /* 宽屏模式 - AI 分析区两列网格 */
+            body.wide-mode .ai-section .ai-blocks-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 16px;
+            }
+            body.wide-mode .ai-block { margin-bottom: 0; }
+
+            /* 宽屏模式 - 新增热点多列 */
+            body.wide-mode .new-section .new-sources-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 24px;
+            }
+            body.wide-mode .new-source-group { margin-bottom: 0; }
+
+            /* 宽屏模式 - 独立展示区多列 */
+            body.wide-mode .standalone-section .standalone-groups-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 24px;
+            }
+            body.wide-mode .standalone-group { margin-bottom: 0; }
+
+            /* Tab 栏 */
+            .tab-bar {
+                display: none;
+                overflow-x: auto;
+                white-space: nowrap;
+                padding: 8px 0 12px 0;
+                margin-bottom: 20px;
+                border-bottom: 2px solid #e5e7eb;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: thin;
+                position: sticky;
+                top: 0;
+                background: white;
+                z-index: 10;
+                gap: 4px;
+            }
+            body.wide-mode .tab-bar { display: flex; }
+            body.wide-mode .tab-bar.tab-hidden { display: none; }
+
+            .tab-btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 8px 16px;
+                border: none;
+                background: #f3f4f6;
+                color: #6b7280;
+                border-radius: 8px 8px 0 0;
+                cursor: pointer;
+                font-size: 13px;
+                font-weight: 500;
+                white-space: nowrap;
+                transition: all 0.2s ease;
+                flex-shrink: 0;
+            }
+            .tab-btn:hover { background: #e5e7eb; color: #374151; }
+            .tab-btn.active { background: #4f46e5; color: white; }
+            .tab-count {
+                font-size: 11px;
+                background: rgba(0,0,0,0.1);
+                padding: 1px 6px;
+                border-radius: 10px;
+            }
+            .tab-btn.active .tab-count { background: rgba(255,255,255,0.3); }
+            .tab-bar::-webkit-scrollbar { height: 4px; }
+            .tab-bar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 2px; }
+            .tab-bar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+            /* 搜索栏 */
+            .search-bar { display: none; padding: 0 0 16px 0; }
+            .search-input {
+                width: 100%;
+                padding: 10px 16px;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                font-size: 14px;
+                outline: none;
+                transition: border-color 0.2s;
+                box-sizing: border-box;
+            }
+            .search-input:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+            .search-input::placeholder { color: #9ca3af; }
+
+            /* 右下角悬浮工具栏 */
+            .fab-bar {
+                position: fixed;
+                bottom: 24px;
+                right: 24px;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                z-index: 100;
+                opacity: 0;
+                transform: translateY(10px);
+                transition: opacity 0.3s, transform 0.3s;
+                pointer-events: none;
+            }
+            .fab-bar.visible {
+                opacity: 1;
+                transform: translateY(0);
+                pointer-events: auto;
+            }
+            .fab-btn {
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                background: #4f46e5;
+                color: white;
+                border: none;
+                cursor: pointer;
+                font-size: 16px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+                transition: transform 0.2s, background 0.2s;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                position: relative;
+            }
+            .fab-btn:hover { transform: scale(1.1); background: #4338ca; }
+            body.dark-mode .fab-btn { background: #533483; }
+            body.dark-mode .fab-btn:hover { background: #6d28d9; }
+
+            /* 快捷键 tooltip */
+            .fab-tooltip {
+                position: absolute;
+                bottom: 0;
+                right: 52px;
+                background: rgba(30, 30, 50, 0.92);
+                backdrop-filter: blur(12px);
+                color: white;
+                border-radius: 10px;
+                padding: 12px 16px;
+                white-space: nowrap;
+                font-size: 12px;
+                line-height: 1.8;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+                border: 1px solid rgba(255,255,255,0.1);
+                opacity: 0;
+                visibility: hidden;
+                transform: translateY(6px);
+                transition: all 0.2s ease;
+                pointer-events: none;
+            }
+            .fab-btn:hover .fab-tooltip,
+            .fab-btn.show-tip .fab-tooltip {
+                opacity: 1;
+                visibility: visible;
+                transform: translateY(0);
+                pointer-events: auto;
+            }
+            .fab-tooltip .tip-row {
+                display: flex;
+                justify-content: space-between;
+                gap: 16px;
+                align-items: center;
+            }
+            .fab-tooltip .tip-key {
+                background: rgba(255,255,255,0.15);
+                border-radius: 3px;
+                padding: 1px 6px;
+                font-family: monospace;
+                font-size: 11px;
+                margin-left: 8px;
+            }
+
+            /* 折叠/展开 */
+            .collapse-icon {
+                display: none;
+                margin-right: 6px;
+                font-size: 12px;
+                color: #9ca3af;
+                transition: transform 0.2s;
+                user-select: none;
+            }
+            .word-header.collapsible { cursor: pointer; }
+            .word-header.collapsible .collapse-icon { display: inline; }
+            .word-header.collapsible:hover {
+                background: #f9fafb;
+                border-radius: 6px;
+                margin: 0 -8px 20px -8px;
+                padding: 8px;
+            }
+            .word-group.collapsed .news-item { display: none; }
+            .word-group.collapsed .collapse-icon { transform: rotate(-90deg); }
+
+            /* Tab 切换动画 */
+            body.wide-mode .word-group[data-tab-index] { animation: tabFadeIn 0.2s ease; }
+            @keyframes tabFadeIn {
+                from { opacity: 0; transform: translateY(8px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+
+            /* 宽屏切换按钮 */
+            .toggle-wide-btn {
+                background: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                color: white;
+                padding: 10px 14px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 15px;
+                transition: all 0.2s ease;
+                backdrop-filter: blur(10px);
+                line-height: 1;
+                min-height: 38px;
+            }
+            .toggle-wide-btn:hover {
+                background: rgba(255, 255, 255, 0.3);
+                border-color: rgba(255, 255, 255, 0.5);
+                transform: translateY(-1px);
+            }
+
+            /* 暗色模式 */
+            body.dark-mode {
+                background: #1a1a2e;
+                color: #e0e0e0;
+            }
+            body.dark-mode .container {
+                background: #16213e;
+                box-shadow: 0 2px 16px rgba(0,0,0,0.3);
+            }
+            body.dark-mode .header {
+                background: linear-gradient(135deg, #0f3460 0%, #533483 100%);
+            }
+            body.dark-mode .content {
+                background: #16213e;
+            }
+            body.dark-mode .word-header {
+                border-bottom-color: #2a2a4a;
+            }
+            body.dark-mode .word-header.collapsible:hover {
+                background: #1a1a3e;
+            }
+            body.dark-mode .news-item {
+                border-bottom-color: #2a2a4a;
+            }
+            body.dark-mode .news-title a {
+                color: #8ab4f8;
+            }
+            body.dark-mode .news-title a:visited {
+                color: #c58af9;
+            }
+            body.dark-mode .news-meta {
+                color: #888;
+            }
+            body.dark-mode .tab-bar {
+                background: #16213e;
+                border-bottom-color: #2a2a4a;
+            }
+            body.dark-mode .tab-btn {
+                color: #aaa;
+            }
+            body.dark-mode .tab-btn.active {
+                color: #8ab4f8;
+                border-bottom-color: #8ab4f8;
+            }
+            body.dark-mode .tab-btn:hover {
+                color: #ccc;
+                background: rgba(255,255,255,0.05);
+            }
+            body.dark-mode .search-input {
+                background: #1a1a3e;
+                border-color: #2a2a4a;
+                color: #e0e0e0;
+            }
+            body.dark-mode .search-input:focus {
+                border-color: #8ab4f8;
+            }
+            /* dark fab-btn 已在 .fab-btn 中处理 */
+            body.dark-mode .footer {
+                background: #0f3460;
+                color: rgba(255,255,255,0.7);
+            }
+            body.dark-mode .rss-item,
+            body.dark-mode .new-item,
+            body.dark-mode .standalone-item {
+                border-bottom-color: #2a2a4a;
+            }
+            body.dark-mode .rss-title a,
+            body.dark-mode .new-item a,
+            body.dark-mode .standalone-item a {
+                color: #8ab4f8;
+            }
+            body.dark-mode .ai-block {
+                background: #1a1a3e;
+                border-color: #2a2a4a;
+            }
+            body.dark-mode .info-value {
+                color: white;
+            }
+
+            /* 暗色模式切换按钮 */
+            .toggle-dark-btn {
+                background: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                color: white;
+                padding: 10px 14px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 15px;
+                transition: all 0.2s ease;
+                backdrop-filter: blur(10px);
+                line-height: 1;
+                min-height: 38px;
+            }
+            .toggle-dark-btn:hover {
+                background: rgba(255, 255, 255, 0.3);
+                border-color: rgba(255, 255, 255, 0.5);
+                transform: translateY(-1px);
+            }
+
+            /* 快捷键面板已集成到 fab-tooltip */
+
+            /* 阅读进度条 */
+            .reading-progress {
+                position: fixed;
+                top: 0; left: 0;
+                width: 0;
+                height: 3px;
+                background: linear-gradient(90deg, #4f46e5, #7c3aed);
+                z-index: 9999;
+                transition: width 0.1s linear;
+            }
+            body.dark-mode .reading-progress {
+                background: linear-gradient(90deg, #8ab4f8, #c58af9);
+            }
+
+            /* 复制按钮样式已集成到 .news-number */
+
+
+
+            /* 新上榜标记 */
+            .badge-new {
+                display: inline-block;
+                background: linear-gradient(135deg, #f43f5e, #ec4899);
+                color: white;
+                font-size: 10px;
+                font-weight: 600;
+                padding: 1px 6px;
+                border-radius: 3px;
+                margin-left: 6px;
+                vertical-align: middle;
+                letter-spacing: 0.5px;
+            }
+            body.dark-mode .badge-new {
+                background: linear-gradient(135deg, #be185d, #9333ea);
+            }
         </style>
     </head>
     <body>
+        <div class="reading-progress"></div>
         <div class="container">
             <div class="header">
+                <div class="header-watermark">TrendRadar</div>
                 <div class="header-toolbar">
                     <div class="theme-controls" aria-label="主题设置">
                         <div class="theme-status" id="theme-status" role="status" aria-live="polite">跟随系统</div>
@@ -1259,8 +1769,14 @@ def render_html_content(
                         </label>
                     </div>
                     <div class="save-buttons">
-                        <button class="save-btn" onclick="saveAsImage()">保存为图片</button>
-                        <button class="save-btn" onclick="saveAsMultipleImages()">分段保存</button>
+                    <button class="toggle-wide-btn" onclick="toggleWideMode()" title="切换宽屏/窄屏">⛶</button>
+                    <div class="save-btn-group">
+                        <button class="save-btn" onclick="saveAsImage()">导出</button>
+                        <button class="save-dropdown-trigger">▾</button>
+                        <div class="save-dropdown-menu">
+                            <button class="save-dropdown-item" onclick="saveAsImage()"><svg class="dropdown-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><circle cx="8" cy="7.5" r="2.5"/><path d="M12 4h.01"/></svg>整页截图</button>
+                            <button class="save-dropdown-item" onclick="saveAsMultipleImages()"><svg class="dropdown-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="4" width="10" height="10" rx="1.5"/><path d="M5 4V2.5A1.5 1.5 0 016.5 1h7A1.5 1.5 0 0115 2.5v7a1.5 1.5 0 01-1.5 1.5H12"/></svg>分段截图</button>
+                        </div>
                     </div>
                 </div>
                 <div class="header-title">热点新闻分析</div>
@@ -1315,6 +1831,9 @@ def render_html_content(
             </div>
 
             <div class="content">
+                <div class="search-bar">
+                    <input type="text" class="search-input" placeholder="搜索新闻标题..." oninput="handleSearch(this.value)">
+                </div>
                 <div class="outline-panel" id="outline-panel">
                     <div class="outline-header">
                         <div class="outline-title">快速导航</div>
@@ -1387,8 +1906,18 @@ def render_html_content(
 
     # 生成热点词汇统计部分的HTML
     stats_html = ""
+    tab_bar_html = ""
     if report_data["stats"]:
         total_count = len(report_data["stats"])
+
+        # 生成 Tab 栏 HTML
+        tab_bar_html = '<div class="tab-bar">'
+        for tab_i, tab_stat in enumerate(report_data["stats"]):
+            escaped_tab_word = html_escape(tab_stat["word"])
+            tab_count = tab_stat["count"]
+            tab_bar_html += f'<button class="tab-btn" data-tab-index="{tab_i}">{escaped_tab_word}<span class="tab-count">{tab_count}</span></button>'
+        tab_bar_html += '<button class="tab-btn" data-tab-index="all">全部</button>'
+        tab_bar_html += '</div>'
 
         for i, stat in enumerate(report_data["stats"], 1):
             count = stat["count"]
@@ -1404,7 +1933,7 @@ def render_html_content(
             escaped_word = html_escape(stat["word"])
 
             stats_html += f"""
-                <div class="word-group foldable-section" id="word-group-{i}" data-outline-title="{escaped_word}" data-outline-level="2" data-foldable="true">
+                <div class="word-group foldable-section" id="word-group-{i}" data-outline-title="{escaped_word}" data-outline-level="2" data-foldable="true" data-tab-index="{i - 1}">
                     <div class="word-header fold-header" data-fold-header role="button" tabindex="0" aria-expanded="true">
                         <div class="word-info">
                             <div class="word-name">{escaped_word}</div>
@@ -1504,7 +2033,7 @@ def render_html_content(
     # 给热榜统计添加外层包装
     if stats_html:
         stats_html = f"""
-                <div class="hotlist-section" id="section-hotlist" data-outline-title="热点词汇" data-outline-level="1">{stats_html}
+                <div class="hotlist-section" id="section-hotlist" data-outline-title="热点词汇" data-outline-level="1">{tab_bar_html}{stats_html}
                 </div>"""
 
     # 生成新增新闻区域的HTML
@@ -1512,7 +2041,8 @@ def render_html_content(
     if show_new_section and report_data["new_titles"]:
         new_titles_html += f"""
                 <div class="new-section" id="section-new-hotlist" data-outline-title="本次新增热点" data-outline-level="1">
-                    <div class="new-section-title">本次新增热点 (共 {report_data['total_new_count']} 条)</div>"""
+                    <div class="new-section-title">本次新增热点 (共 {report_data['total_new_count']} 条)</div>
+                    <div class="new-sources-grid">"""
 
         for source_data in report_data["new_titles"]:
             escaped_source = html_escape(source_data["source_name"])
@@ -1568,6 +2098,7 @@ def render_html_content(
                     </div>"""
 
         new_titles_html += """
+                    </div>
                 </div>"""
 
     # 生成 RSS 统计内容
@@ -1615,7 +2146,8 @@ def render_html_content(
                     <div class="rss-section-header">
                         <div class="rss-section-title">{title}</div>
                         <div class="rss-section-count">{total_count} 条</div>
-                    </div>"""
+                    </div>
+                    <div class="rss-feeds-grid">"""
 
         # 按关键词分组渲染（与热榜格式一致）
         for stat in stats:
@@ -1672,6 +2204,7 @@ def render_html_content(
                     </div>"""
 
         rss_html += """
+                    </div>
                 </div>"""
         return rss_html
 
@@ -1735,6 +2268,17 @@ def render_html_content(
         if total_count == 0:
             return ""
 
+        # 收集所有分组信息用于生成 tab
+        all_groups = []
+        for p in platforms:
+            items = p.get("items", [])
+            if items:
+                all_groups.append({"name": p.get("name", p.get("id", "")), "count": len(items)})
+        for f in rss_feeds:
+            items = f.get("items", [])
+            if items:
+                all_groups.append({"name": f.get("name", f.get("id", "")), "count": len(items)})
+
         standalone_html = f"""
                 <div class="standalone-section" id="section-standalone" data-outline-title="独立展示区" data-outline-level="1">
                     <div class="standalone-section-header">
@@ -1742,6 +2286,22 @@ def render_html_content(
                         <div class="standalone-section-count">{total_count} 条</div>
                     </div>"""
 
+        # 生成 tab 栏（2+ 分组时）
+        if len(all_groups) >= 2:
+            standalone_html += """
+                    <div class="tab-bar standalone-tab-bar">"""
+            for idx, g in enumerate(all_groups):
+                active = ' active' if idx == 0 else ''
+                standalone_html += f"""
+                        <button class="tab-btn{active}" data-standalone-tab="{idx}">{html_escape(g["name"])}<span class="tab-count">{g["count"]}</span></button>"""
+            standalone_html += f"""
+                        <button class="tab-btn" data-standalone-tab="all">全部<span class="tab-count">{total_count}</span></button>
+                    </div>"""
+
+        standalone_html += """
+                    <div class="standalone-groups-grid">"""
+
+        group_idx = 0
         # 渲染热榜平台（复用 word-group 结构）
         for platform in platforms:
             platform_name = platform.get("name", platform.get("id", ""))
@@ -1750,7 +2310,7 @@ def render_html_content(
                 continue
 
             standalone_html += f"""
-                    <div class="standalone-group">
+                    <div class="standalone-group" data-standalone-tab="{group_idx}">
                         <div class="standalone-header">
                             <div class="standalone-name">{html_escape(platform_name)}</div>
                             <div class="standalone-count">{len(items)} 条</div>
@@ -1832,6 +2392,7 @@ def render_html_content(
 
             standalone_html += """
                     </div>"""
+            group_idx += 1
 
         # 渲染 RSS 源（复用相同结构）
         for feed in rss_feeds:
@@ -1841,7 +2402,7 @@ def render_html_content(
                 continue
 
             standalone_html += f"""
-                    <div class="standalone-group">
+                    <div class="standalone-group" data-standalone-tab="{group_idx}">
                         <div class="standalone-header">
                             <div class="standalone-name">{html_escape(feed_name)}</div>
                             <div class="standalone-count">{len(items)} 条</div>
@@ -1895,8 +2456,10 @@ def render_html_content(
 
             standalone_html += """
                     </div>"""
+            group_idx += 1
 
         standalone_html += """
+                    </div>
                 </div>"""
         return standalone_html
 
@@ -1997,6 +2560,21 @@ def render_html_content(
             </div>
         </div>
 
+        <div class="fab-bar">
+            <button class="fab-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="返回顶部">↑</button>
+            <button class="fab-btn fab-help">
+                <span>?</span>
+                <div class="fab-tooltip">
+                    <div class="tip-row"><span>切换宽屏</span><span class="tip-key">W</span></div>
+                    <div class="tip-row"><span>暗色模式</span><span class="tip-key">D</span></div>
+                    <div class="tip-row"><span>搜索</span><span class="tip-key">/</span></div>
+                    <div class="tip-row"><span>上一个 Tab</span><span class="tip-key">←</span></div>
+                    <div class="tip-row"><span>下一个 Tab</span><span class="tip-key">→</span></div>
+                    <div class="tip-row"><span>序号可复制</span><span class="tip-key">点击</span></div>
+                </div>
+            </button>
+        </div>
+
         <script>
             const DEFAULT_THEME_MODE = '""" + default_theme_mode + """';
             const FORCE_SYSTEM_THEME = DEFAULT_THEME_MODE === 'system';
@@ -2057,6 +2635,7 @@ def render_html_content(
                 document.documentElement.dataset.themeMode = normalizedMode;
                 document.documentElement.dataset.theme = effectiveTheme;
                 document.documentElement.style.colorScheme = effectiveTheme;
+                document.body.classList.toggle('dark-mode', effectiveTheme === 'dark');
                 updateThemeControls();
             }
 
@@ -2255,7 +2834,254 @@ def render_html_content(
                     expandBtn.addEventListener('click', () => setAllFoldState(false));
                 }
             }
+            // ===== 浏览器增强功能 =====
 
+            function toggleWideMode() {
+                document.body.classList.toggle('wide-mode');
+                var isWide = document.body.classList.contains('wide-mode');
+                try { localStorage.setItem('trendradar-wide-mode', isWide ? '1' : '0'); } catch(e) {}
+                var btn = document.querySelector('.toggle-wide-btn');
+                if (btn) btn.textContent = isWide ? '⊡' : '⛶';
+                initTabVisibility();
+                initCollapseVisibility();
+                initStandaloneTabVisibility();
+            }
+
+            function toggleDarkMode() {
+                if (FORCE_SYSTEM_THEME) {
+                    return;
+                }
+                applyTheme(resolveEffectiveTheme() === 'dark' ? 'light' : 'dark');
+            }
+
+            function initTabs() {
+                var tabBar = document.querySelector('.tab-bar');
+                if (!tabBar) return;
+                var tabs = tabBar.querySelectorAll('.tab-btn');
+                var groups = document.querySelectorAll('.word-group[data-tab-index]');
+                initTabVisibility();
+
+                function activateTab(index) {
+                    tabs.forEach(function(t) { t.classList.remove('active'); });
+                    if (index === 'all') {
+                        var allBtn = tabBar.querySelector('[data-tab-index="all"]');
+                        if (allBtn) allBtn.classList.add('active');
+                        groups.forEach(function(g) { g.style.display = ''; });
+                        try { history.replaceState(null, '', '#all'); } catch(e) {}
+                        return;
+                    }
+                    var idx = parseInt(index);
+                    tabs.forEach(function(t) {
+                        if (parseInt(t.dataset.tabIndex) === idx) t.classList.add('active');
+                    });
+                    if (document.body.classList.contains('wide-mode') && !tabBar.classList.contains('tab-hidden')) {
+                        groups.forEach(function(g) {
+                            g.style.display = (parseInt(g.dataset.tabIndex) === idx) ? '' : 'none';
+                        });
+                    }
+                    try { history.replaceState(null, '', '#tab-' + idx); } catch(e) {}
+                }
+
+                tabs.forEach(function(tab) {
+                    tab.addEventListener('click', function() {
+                        var idx = tab.dataset.tabIndex;
+                        activateTab(idx === 'all' ? 'all' : parseInt(idx));
+                    });
+                });
+
+                tabBar.addEventListener('keydown', function(e) {
+                    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                        var tabsArr = Array.from(tabs);
+                        var ci = tabsArr.findIndex(function(t) { return t.classList.contains('active'); });
+                        var dir = e.key === 'ArrowRight' ? 1 : -1;
+                        var ni = Math.max(0, Math.min(tabsArr.length - 1, ci + dir));
+                        var nt = tabsArr[ni];
+                        activateTab(nt.dataset.tabIndex === 'all' ? 'all' : parseInt(nt.dataset.tabIndex));
+                        nt.focus();
+                        e.preventDefault();
+                    }
+                });
+
+                var hash = window.location.hash;
+                if (hash === '#all') { activateTab('all'); }
+                else if (hash.indexOf('#tab-') === 0) { activateTab(parseInt(hash.replace('#tab-', ''))); }
+                else { activateTab(0); }
+            }
+
+            function initTabVisibility() {
+                var tabBar = document.querySelector('.tab-bar');
+                if (!tabBar) return;
+                var groups = document.querySelectorAll('.word-group[data-tab-index]');
+                var isWide = document.body.classList.contains('wide-mode');
+                if (!isWide || groups.length <= 2) {
+                    tabBar.classList.add('tab-hidden');
+                    groups.forEach(function(g) { g.style.display = ''; });
+                } else {
+                    tabBar.classList.remove('tab-hidden');
+                    var activeTab = tabBar.querySelector('.tab-btn.active');
+                    if (activeTab) { activeTab.click(); }
+                    else {
+                        var firstTab = tabBar.querySelector('.tab-btn');
+                        if (firstTab) firstTab.click();
+                    }
+                }
+            }
+
+            function handleSearch(query) {
+                query = query.toLowerCase();
+                document.querySelectorAll('.news-item').forEach(function(item) {
+                    var title = (item.querySelector('.news-title') || {}).textContent || '';
+                    item.style.display = (!query || title.toLowerCase().indexOf(query) !== -1) ? '' : 'none';
+                });
+                document.querySelectorAll('.rss-item').forEach(function(item) {
+                    var title = (item.querySelector('.rss-title') || {}).textContent || '';
+                    item.style.display = (!query || title.toLowerCase().indexOf(query) !== -1) ? '' : 'none';
+                });
+            }
+
+            function initBackToTop() {
+                var fabBar = document.querySelector('.fab-bar');
+                if (!fabBar) return;
+                window.addEventListener('scroll', function() {
+                    fabBar.classList.toggle('visible', window.scrollY > 300);
+                });
+            }
+
+            function initCollapse() {
+                document.querySelectorAll('.word-header').forEach(function(header) {
+                    header.addEventListener('click', function() {
+                        var tabBar = document.querySelector('.tab-bar');
+                        if (document.body.classList.contains('wide-mode') && tabBar && !tabBar.classList.contains('tab-hidden')) return;
+                        var group = header.closest('.word-group');
+                        if (group) group.classList.toggle('collapsed');
+                    });
+                });
+                initCollapseVisibility();
+            }
+
+            function initCollapseVisibility() {
+                var headers = document.querySelectorAll('.word-header');
+                var tabBar = document.querySelector('.tab-bar');
+                var isTabMode = document.body.classList.contains('wide-mode') && tabBar && !tabBar.classList.contains('tab-hidden');
+                headers.forEach(function(h) {
+                    if (isTabMode) { h.classList.remove('collapsible'); }
+                    else { h.classList.add('collapsible'); }
+                });
+                if (isTabMode) {
+                    document.querySelectorAll('.word-group.collapsed').forEach(function(g) {
+                        g.classList.remove('collapsed');
+                    });
+                }
+            }
+
+            // 独立展示区 Tab 切换
+            function initStandaloneTabs() {
+                var tabBar = document.querySelector('.standalone-tab-bar');
+                if (!tabBar) return;
+                var groups = document.querySelectorAll('.standalone-group[data-standalone-tab]');
+                var btns = tabBar.querySelectorAll('.tab-btn[data-standalone-tab]');
+
+                function activateStandaloneTab(val) {
+                    btns.forEach(function(b) {
+                        var bVal = b.getAttribute('data-standalone-tab');
+                        b.classList.toggle('active', bVal === String(val));
+                    });
+                    groups.forEach(function(g) {
+                        var gVal = g.getAttribute('data-standalone-tab');
+                        g.style.display = (val === 'all' || gVal === String(val)) ? '' : 'none';
+                    });
+                }
+
+                btns.forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        activateStandaloneTab(btn.getAttribute('data-standalone-tab'));
+                    });
+                });
+
+                // 初始状态
+                initStandaloneTabVisibility();
+            }
+
+            function initStandaloneTabVisibility() {
+                var tabBar = document.querySelector('.standalone-tab-bar');
+                if (!tabBar) return;
+                var groups = document.querySelectorAll('.standalone-group[data-standalone-tab]');
+                var isWide = document.body.classList.contains('wide-mode');
+                if (!isWide || groups.length <= 1) {
+                    tabBar.classList.add('tab-hidden');
+                    groups.forEach(function(g) { g.style.display = ''; });
+                } else {
+                    tabBar.classList.remove('tab-hidden');
+                    var activeBtn = tabBar.querySelector('.tab-btn.active');
+                    if (activeBtn) activeBtn.click();
+                    else { var first = tabBar.querySelector('.tab-btn'); if (first) first.click(); }
+                }
+            }
+
+            function prepareForScreenshot() {
+                var state = {
+                    wasWide: document.body.classList.contains('wide-mode'),
+                    hiddenGroups: []
+                };
+                document.body.classList.remove('wide-mode');
+                state.wasDark = document.body.classList.contains('dark-mode');
+                document.body.classList.remove('dark-mode');
+                document.querySelectorAll('.word-group[data-tab-index]').forEach(function(g, i) {
+                    if (g.style.display === 'none') {
+                        state.hiddenGroups.push(i);
+                        g.style.display = '';
+                    }
+                });
+                state.hiddenStandaloneGroups = [];
+                document.querySelectorAll('.standalone-group[data-standalone-tab]').forEach(function(g, i) {
+                    if (g.style.display === 'none') {
+                        state.hiddenStandaloneGroups.push(i);
+                        g.style.display = '';
+                    }
+                });
+                document.querySelectorAll('.tab-bar, .standalone-tab-bar, .search-bar, .fab-bar, .toggle-wide-btn').forEach(function(el) {
+                    el.dataset.prevDisplay = el.style.display || '';
+                    el.style.display = 'none';
+                });
+                document.querySelectorAll('.toggle-dark-btn').forEach(function(el) {
+                    el.dataset.prevDisplay = el.style.display || ''; el.style.display = 'none';
+                });
+                document.querySelectorAll('.reading-progress').forEach(function(el) { el.style.display = 'none'; });
+                document.querySelectorAll('.header-watermark').forEach(function(el) { el.style.display = 'none'; });
+                return state;
+            }
+
+            function restoreAfterScreenshot(state) {
+                if (state.wasWide) document.body.classList.add('wide-mode');
+                if (state.wasDark) document.body.classList.add('dark-mode');
+                var groups = document.querySelectorAll('.word-group[data-tab-index]');
+                state.hiddenGroups.forEach(function(i) {
+                    if (groups[i]) groups[i].style.display = 'none';
+                });
+                var standaloneGroups = document.querySelectorAll('.standalone-group[data-standalone-tab]');
+                if (state.hiddenStandaloneGroups) {
+                    state.hiddenStandaloneGroups.forEach(function(i) {
+                        if (standaloneGroups[i]) standaloneGroups[i].style.display = 'none';
+                    });
+                }
+                document.querySelectorAll('.tab-bar, .standalone-tab-bar, .search-bar, .fab-bar, .toggle-wide-btn').forEach(function(el) {
+                    el.style.display = el.dataset.prevDisplay || '';
+                    delete el.dataset.prevDisplay;
+                });
+                document.querySelectorAll('.toggle-dark-btn').forEach(function(el) {
+                    el.style.display = el.dataset.prevDisplay || ''; delete el.dataset.prevDisplay;
+                });
+                document.querySelectorAll('.reading-progress').forEach(function(el) { el.style.display = ''; });
+                document.querySelectorAll('.reading-progress').forEach(function(el) { el.style.display = ''; });
+                document.querySelectorAll('.header-watermark').forEach(function(el) { el.style.display = ''; });
+                initTabVisibility();
+                initCollapseVisibility();
+                initStandaloneTabVisibility();
+                var fabBar = document.querySelector('.fab-bar');
+                if (fabBar && window.scrollY > 300) fabBar.classList.add('visible');
+            }
+
+            // ===== 截图功能 =====
             async function saveAsImage() {
                 const button = event.target;
                 const originalText = button.textContent;
@@ -2269,6 +3095,9 @@ def render_html_content(
 
                     // 等待页面稳定
                     await new Promise(resolve => setTimeout(resolve, 200));
+
+                    // 截图前准备：切回窄屏布局
+                    var screenshotState = prepareForScreenshot();
 
                     // 截图前隐藏按钮
                     const buttons = document.querySelector('.save-buttons');
@@ -2308,6 +3137,7 @@ def render_html_content(
                     });
 
                     buttons.style.visibility = 'visible';
+                    restoreAfterScreenshot(screenshotState);
                     if (outlinePanel) {
                         outlinePanel.style.visibility = 'visible';
                     }
@@ -2336,6 +3166,7 @@ def render_html_content(
                 } catch (error) {
                     const buttons = document.querySelector('.save-buttons');
                     buttons.style.visibility = 'visible';
+                    restoreAfterScreenshot(screenshotState);
                     const outlinePanel = document.querySelector('.outline-panel');
                     if (outlinePanel) {
                         outlinePanel.style.visibility = 'visible';
@@ -2359,6 +3190,7 @@ def render_html_content(
                 const foldStateSnapshot = getFoldStateSnapshot();
                 const headerToolbar = document.querySelector('.header-toolbar');
                 const captureBackground = getComputedStyle(container).backgroundColor || '#ffffff';
+                var screenshotState2 = prepareForScreenshot();
                 setAllFoldState(false);
 
                 try {
@@ -2585,6 +3417,7 @@ def render_html_content(
                     }
 
                     button.textContent = `已保存 ${segments.length} 张图片!`;
+                    restoreAfterScreenshot(screenshotState2);
                     setTimeout(() => {
                         button.textContent = originalText;
                         button.disabled = false;
@@ -2594,6 +3427,7 @@ def render_html_content(
                     console.error('分段保存失败:', error);
                     const buttons = document.querySelector('.save-buttons');
                     buttons.style.visibility = 'visible';
+                    restoreAfterScreenshot(screenshotState2);
                     const headerToolbar = document.querySelector('.header-toolbar');
                     if (headerToolbar) {
                         headerToolbar.style.visibility = 'visible';
@@ -2616,10 +3450,109 @@ def render_html_content(
                 window.scrollTo(0, 0);
                 initThemeControls();
                 initFoldableSections();
+
+                // 自动检测宽屏模式
+                var savedMode = null;
+                try { savedMode = localStorage.getItem('trendradar-wide-mode'); } catch(e) {}
+                if (savedMode === '1' || (savedMode === null && window.innerWidth > 768)) {
+                    document.body.classList.add('wide-mode');
+                    var btn = document.querySelector('.toggle-wide-btn');
+                    if (btn) btn.textContent = '⊡';
+                }
+
+                // 启用搜索栏
+                var searchBar = document.querySelector('.search-bar');
+                if (searchBar) searchBar.style.display = 'block';
+
+                // 初始化增强功能
+                initTabs();
+                initBackToTop();
+                initStandaloneTabs();
                 buildOutline();
                 bindOutlineActions();
                 updateOutlinePanelLayout();
                 window.addEventListener('resize', updateOutlinePanelLayout);
+
+                // 键盘快捷键
+                document.addEventListener('keydown', function(e) {
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                    var helpBtn = document.querySelector('.fab-help');
+                    switch(e.key) {
+                        case '?':
+                            if (helpBtn) {
+                                helpBtn.classList.toggle('show-tip');
+                                var fabBar = document.querySelector('.fab-bar');
+                                if (fabBar) fabBar.classList.add('visible');
+                            }
+                            break;
+                        case 'Escape':
+                            if (helpBtn) helpBtn.classList.remove('show-tip');
+                            break;
+                        case 'w': case 'W': toggleWideMode(); break;
+                        case 'd': case 'D': toggleDarkMode(); break;
+                        case '/': e.preventDefault(); var si = document.querySelector('.search-input'); if (si) si.focus(); break;
+                    }
+                });
+
+                // 阅读进度条
+                var progressBar = document.querySelector('.reading-progress');
+                if (progressBar) {
+                    window.addEventListener('scroll', function() {
+                        var h = document.documentElement.scrollHeight - window.innerHeight;
+                        progressBar.style.width = (h > 0 ? (window.scrollY / h * 100) : 0) + '%';
+                    });
+                }
+
+                // 一键复制：hover 时数字变复制图标
+                var copySvg = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M5 11H3.5A1.5 1.5 0 012 9.5v-7A1.5 1.5 0 013.5 1h7A1.5 1.5 0 0112 2.5V5"/></svg>';
+                var checkSvg = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#22c55e" stroke-width="2"><path d="M3 8.5l3.5 3.5 7-7"/></svg>';
+                document.querySelectorAll('.news-item .news-number').forEach(function(numEl) {
+                    var item = numEl.closest('.news-item');
+                    var titleEl = item ? item.querySelector('.news-title a') : null;
+                    if (!titleEl) return;
+                    var numText = numEl.textContent.trim();
+                    numEl.innerHTML = '<span class="num-text">' + numText + '</span><span class="copy-icon">' + copySvg + '</span>';
+                    numEl.title = '点击复制标题和链接';
+                    numEl.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        var text = titleEl.textContent.trim() + ' ' + titleEl.href;
+                        navigator.clipboard.writeText(text).then(function() {
+                            numEl.classList.add('copied');
+                            numEl.querySelector('.copy-icon').innerHTML = checkSvg;
+                            setTimeout(function() {
+                                numEl.classList.remove('copied');
+                                numEl.querySelector('.copy-icon').innerHTML = copySvg;
+                            }, 1500);
+                        });
+                    });
+                });
+
+
+
+                // Header watermark 鼠标跟随揭示
+                (function() {
+                    var header = document.querySelector('.header');
+                    var watermark = document.querySelector('.header-watermark');
+                    if (!header || !watermark) return;
+
+                    var radius = 100;
+
+                    header.addEventListener('mousemove', function(e) {
+                        var rect = watermark.getBoundingClientRect();
+                        var x = e.clientX - rect.left;
+                        var y = e.clientY - rect.top;
+                        var maskVal = 'radial-gradient(circle ' + radius + 'px at ' + x + 'px ' + y + 'px, rgba(0,0,0,1) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0) 100%)';
+                        watermark.style.webkitMaskImage = maskVal;
+                        watermark.style.maskImage = maskVal;
+                        watermark.style.color = 'rgba(255, 255, 255, 0.25)';
+                    });
+
+                    header.addEventListener('mouseleave', function() {
+                        watermark.style.webkitMaskImage = 'radial-gradient(circle 0px at 50% 50%, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%)';
+                        watermark.style.maskImage = 'radial-gradient(circle 0px at 50% 50%, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%)';
+                        watermark.style.color = 'rgba(255, 255, 255, 0.15)';
+                    });
+                })();
             });
         </script>
     </body>
