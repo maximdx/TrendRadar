@@ -1,0 +1,73 @@
+name: Deploy Report HTML Override
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-report-html-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.TRENDRADAR_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.TRENDRADAR_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Verify local deploy payload
+        run: |
+          set -euo pipefail
+          test -f trendradar/report/html.py
+          grep -q "const savedMode = localStorage.getItem(storageKey);" trendradar/report/html.py
+
+      - name: Verify remote deploy access
+        env:
+          DEPLOY_HOST: ${{ vars.TRENDRADAR_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.TRENDRADAR_DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "whoami && sudo -l"
+
+      - name: Upload html override
+        env:
+          DEPLOY_HOST: ${{ vars.TRENDRADAR_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.TRENDRADAR_DEPLOY_USER }}
+          DEPLOY_STAGE_PATH: ${{ vars.TRENDRADAR_DEPLOY_STAGE_PATH }}
+        run: |
+          set -euo pipefail
+          scp trendradar/report/html.py "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_STAGE_PATH"
+
+      - name: Run remote deploy
+        env:
+          DEPLOY_HOST: ${{ vars.TRENDRADAR_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.TRENDRADAR_DEPLOY_USER }}
+          DEPLOY_STAGE_PATH: ${{ vars.TRENDRADAR_DEPLOY_STAGE_PATH }}
+          DEPLOY_COMMAND: ${{ vars.TRENDRADAR_DEPLOY_COMMAND }}
+        run: |
+          set -euo pipefail
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "sudo $DEPLOY_COMMAND '$DEPLOY_STAGE_PATH'"
+
+      - name: Verify public site
+        env:
+          DEPLOY_DOMAIN: ${{ vars.TRENDRADAR_DEPLOY_DOMAIN }}
+        run: |
+          set -euo pipefail
+          curl -fsSL "https://$DEPLOY_DOMAIN" | grep -q "const savedMode = localStorage.getItem(storageKey);"
