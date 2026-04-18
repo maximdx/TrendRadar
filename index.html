@@ -1624,7 +1624,7 @@
 
             <div class="content">
                 <div class="search-bar">
-                    <input type="text" class="search-input" placeholder="搜索新闻标题..." oninput="handleSearch(this.value)">
+                    <input type="text" class="search-input" placeholder="搜索新闻标题或来源..." oninput="handleSearch(this.value)">
                 </div>
                 <div class="outline-panel" id="outline-panel">
                     <div class="outline-header">
@@ -3764,14 +3764,23 @@
             }
 
             function handleSearch(query) {
-                query = query.toLowerCase();
+                query = query.toLowerCase().trim();
                 document.querySelectorAll('.news-item').forEach(function(item) {
                     var title = (item.querySelector('.news-title') || {}).textContent || '';
-                    item.style.display = (!query || title.toLowerCase().indexOf(query) !== -1) ? '' : 'none';
+                    var source = item.getAttribute('data-search-source')
+                        || ((item.querySelector('.source-name') || {}).textContent || '')
+                        || (((item.closest('.standalone-group') || {}).querySelector || function() { return null; })('.standalone-name') || {}).textContent
+                        || '';
+                    var haystack = (title + ' ' + source).toLowerCase();
+                    item.style.display = (!query || haystack.indexOf(query) !== -1) ? '' : 'none';
                 });
                 document.querySelectorAll('.rss-item').forEach(function(item) {
                     var title = (item.querySelector('.rss-title') || {}).textContent || '';
-                    item.style.display = (!query || title.toLowerCase().indexOf(query) !== -1) ? '' : 'none';
+                    var source = item.getAttribute('data-search-source')
+                        || ((item.querySelector('.rss-author') || {}).textContent || '')
+                        || '';
+                    var haystack = (title + ' ' + source).toLowerCase();
+                    item.style.display = (!query || haystack.indexOf(query) !== -1) ? '' : 'none';
                 });
             }
 

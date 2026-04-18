@@ -1868,7 +1868,7 @@ def render_html_content(
                     <div class="outline-links" id="outline-links"></div>
                 </div>
                 <div class="search-bar">
-                    <input type="text" class="search-input" placeholder="搜索新闻标题..." oninput="handleSearch(this.value)">
+                    <input type="text" class="search-input" placeholder="搜索新闻标题或来源..." oninput="handleSearch(this.value)">
                 </div>"""
 
     # 处理失败ID错误信息
@@ -1978,7 +1978,7 @@ def render_html_content(
                 new_class = "new" if is_new else ""
 
                 stats_html += f"""
-                    <div class="news-item {new_class}">
+                    <div class="news-item {new_class}" data-search-source="{html_escape(title_data.get("source_name", ""))}">
                         <div class="news-number">{j}</div>
                         <div class="news-content">
                             <div class="news-header">"""
@@ -2199,7 +2199,7 @@ def render_html_content(
                 is_new = title_data.get("is_new", False)
 
                 rss_html += """
-                        <div class="rss-item">
+                        <div class="rss-item" data-search-source="{html_escape(source_name)}">
                             <div class="rss-meta">"""
 
                 if time_display:
@@ -2352,7 +2352,7 @@ def render_html_content(
                 count = item.get("count", 1)
 
                 standalone_html += f"""
-                        <div class="news-item">
+                        <div class="news-item" data-search-source="{html_escape(platform_name)}">
                             <div class="news-number">{j}</div>
                             <div class="news-content">
                                 <div class="news-header">"""
@@ -2441,7 +2441,7 @@ def render_html_content(
                 author = item.get("author", "")
 
                 standalone_html += f"""
-                        <div class="news-item">
+                        <div class="news-item" data-search-source="{html_escape(author)}">
                             <div class="news-number">{j}</div>
                             <div class="news-content">
                                 <div class="news-header">"""
@@ -2689,14 +2689,18 @@ def render_html_content(
             }
 
             function handleSearch(query) {
-                query = query.toLowerCase();
+                query = query.toLowerCase().trim();
                 document.querySelectorAll('.news-item').forEach(function(item) {
                     var title = (item.querySelector('.news-title') || {}).textContent || '';
-                    item.style.display = (!query || title.toLowerCase().indexOf(query) !== -1) ? '' : 'none';
+                    var source = item.getAttribute('data-search-source') || '';
+                    var haystack = (title + ' ' + source).toLowerCase();
+                    item.style.display = (!query || haystack.indexOf(query) !== -1) ? '' : 'none';
                 });
                 document.querySelectorAll('.rss-item').forEach(function(item) {
                     var title = (item.querySelector('.rss-title') || {}).textContent || '';
-                    item.style.display = (!query || title.toLowerCase().indexOf(query) !== -1) ? '' : 'none';
+                    var source = item.getAttribute('data-search-source') || '';
+                    var haystack = (title + ' ' + source).toLowerCase();
+                    item.style.display = (!query || haystack.indexOf(query) !== -1) ? '' : 'none';
                 });
             }
 
@@ -3165,14 +3169,18 @@ def render_html_content(
             }
 
             function handleSearch(query) {
-                query = query.toLowerCase();
+                query = query.toLowerCase().trim();
                 document.querySelectorAll('.news-item').forEach(function(item) {
                     var title = (item.querySelector('.news-title') || {}).textContent || '';
-                    item.style.display = (!query || title.toLowerCase().indexOf(query) !== -1) ? '' : 'none';
+                    var source = item.getAttribute('data-search-source') || '';
+                    var haystack = (title + ' ' + source).toLowerCase();
+                    item.style.display = (!query || haystack.indexOf(query) !== -1) ? '' : 'none';
                 });
                 document.querySelectorAll('.rss-item').forEach(function(item) {
                     var title = (item.querySelector('.rss-title') || {}).textContent || '';
-                    item.style.display = (!query || title.toLowerCase().indexOf(query) !== -1) ? '' : 'none';
+                    var source = item.getAttribute('data-search-source') || '';
+                    var haystack = (title + ' ' + source).toLowerCase();
+                    item.style.display = (!query || haystack.indexOf(query) !== -1) ? '' : 'none';
                 });
             }
 
