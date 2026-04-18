@@ -37,6 +37,8 @@ jobs:
           set -euo pipefail
           test -f trendradar/report/html.py
           grep -q "const savedMode = localStorage.getItem(storageKey);" trendradar/report/html.py
+          grep -q 'placeholder="搜索新闻标题或来源..."' trendradar/report/html.py
+          grep -q "var haystack = (title + ' ' + source).toLowerCase();" trendradar/report/html.py
 
       - name: Verify remote deploy access
         env:
@@ -70,4 +72,7 @@ jobs:
           DEPLOY_DOMAIN: ${{ vars.TRENDRADAR_DEPLOY_DOMAIN }}
         run: |
           set -euo pipefail
-          curl -fsSL "https://$DEPLOY_DOMAIN" | grep -q "const savedMode = localStorage.getItem(storageKey);"
+          PAGE_CONTENT="$(curl -fsSL "https://$DEPLOY_DOMAIN")"
+          printf '%s' "$PAGE_CONTENT" | grep -q "const savedMode = localStorage.getItem(storageKey);"
+          printf '%s' "$PAGE_CONTENT" | grep -q 'placeholder="搜索新闻标题或来源..."'
+          printf '%s' "$PAGE_CONTENT" | grep -q "var haystack = (title + ' ' + source).toLowerCase();"
