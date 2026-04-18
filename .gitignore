@@ -1,5 +1,5 @@
 # Local runtime outputs
-output/
+/output/
 
 # Python cache artifacts
 __pycache__/
@@ -11,3 +11,6 @@ __pycache__/
 
 # macOS metadata
 .DS_Store
+
+# Local-only project context / ops notes
+LOCAL_*.md
