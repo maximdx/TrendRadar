@@ -328,8 +328,26 @@ class NewsAnalyzer:
             scheduler = self.ctx.create_scheduler()
             date_str = self.ctx.format_date()
             if scheduler.already_executed(schedule.period_key, "analyze", date_str):
-                print(f"[AI] 调度器: 时间段 {schedule.period_name or schedule.period_key} 今天已分析过，跳过")
-                return None
+                payload = scheduler.get_execution_payload(
+                    schedule.period_key, "analyze", date_str
+                )
+                if payload:
+                    try:
+                        cached_result = AIAnalysisResult.from_dict(payload)
+                        if cached_result.success is True:
+                            print(
+                                f"[AI] 调度器: 时间段 "
+                                f"{schedule.period_name or schedule.period_key} "
+                                "今天已分析过，复用缓存结果"
+                            )
+                            return cached_result
+                    except (TypeError, ValueError) as e:
+                        print(f"[AI] 缓存结果无效，将重新分析: {e}")
+                print(
+                    f"[AI] 调度器: 时间段 "
+                    f"{schedule.period_name or schedule.period_key} "
+                    "今天已分析过但无可用缓存，重新分析"
+                )
             else:
                 print(f"[AI] 调度器: 时间段 {schedule.period_name or schedule.period_key} 今天首次分析")
 
@@ -420,7 +438,12 @@ class NewsAnalyzer:
                 if schedule.once_analyze and schedule.period_key:
                     scheduler = self.ctx.create_scheduler()
                     date_str = self.ctx.format_date()
-                    scheduler.record_execution(schedule.period_key, "analyze", date_str)
+                    scheduler.record_execution(
+                        schedule.period_key,
+                        "analyze",
+                        date_str,
+                        result.to_dict(),
+                    )
             elif result.skipped:
                 print(f"[AI] {result.error}")
             else:

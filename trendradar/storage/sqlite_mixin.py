@@ -5,6 +5,7 @@ SQLite 存储 Mixin
 提供共用的 SQLite 数据库操作逻辑，供 LocalStorageBackend 和 RemoteStorageBackend 复用。
 """
 
+import json
 import sqlite3
 from abc import abstractmethod
 from datetime import datetime
@@ -116,6 +117,8 @@ class SQLiteStorageMixin:
 
         if not self._column_exists(conn, "news_items", "published_at"):
             conn.execute("ALTER TABLE news_items ADD COLUMN published_at TEXT DEFAULT ''")
+        if not self._column_exists(conn, "period_executions", "result_payload"):
+            conn.execute("ALTER TABLE period_executions ADD COLUMN result_payload TEXT")
 
     def _migrate_rss_schema(self, conn: sqlite3.Connection) -> None:
         """迁移 rss_items 表结构（为已有数据库添加 guid 列）"""
@@ -794,7 +797,32 @@ class SQLiteStorageMixin:
             print(f"[存储] 检查时间段执行记录失败: {e}")
             return False
 
-    def _record_period_execution_impl(self, date_str: str, period_key: str, action: str) -> bool:
+    def _get_period_execution_payload_impl(
+        self, date_str: str, period_key: str, action: str
+    ) -> Optional[Dict[str, Any]]:
+        """获取指定时间段 action 的持久化结果。"""
+        try:
+            conn = self._get_connection(date_str)
+            cursor = conn.execute("""
+                SELECT result_payload FROM period_executions
+                WHERE execution_date = ? AND period_key = ? AND action = ?
+            """, (date_str, period_key, action))
+            row = cursor.fetchone()
+            if not row or not row[0]:
+                return None
+            payload = json.loads(row[0])
+            return payload if isinstance(payload, dict) else None
+        except Exception as e:
+            print(f"[存储] 读取时间段执行结果失败: {e}")
+            return None
+
+    def _record_period_execution_impl(
+        self,
+        date_str: str,
+        period_key: str,
+        action: str,
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         """
         记录时间段的 action 执行
 
@@ -802,6 +830,7 @@ class SQLiteStorageMixin:
             date_str: 日期字符串 YYYY-MM-DD
             period_key: 时间段 key
             action: 动作类型 (analyze / push)
+            payload: action 结果（可选）
 
         Returns:
             是否记录成功
@@ -817,17 +846,26 @@ class SQLiteStorageMixin:
                     execution_date TEXT NOT NULL,
                     period_key TEXT NOT NULL,
                     action TEXT NOT NULL,
+                    result_payload TEXT,
                     executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(execution_date, period_key, action)
                 )
             """)
 
             now_str = self._get_configured_time().strftime("%Y-%m-%d %H:%M:%S")
+            payload_json = json.dumps(payload, ensure_ascii=False) if payload is not None else None
 
             cursor.execute("""
-                INSERT OR IGNORE INTO period_executions (execution_date, period_key, action, executed_at)
-                VALUES (?, ?, ?, ?)
-            """, (date_str, period_key, action, now_str))
+                INSERT INTO period_executions
+                    (execution_date, period_key, action, result_payload, executed_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(execution_date, period_key, action) DO UPDATE SET
+                    result_payload = COALESCE(
+                        excluded.result_payload,
+                        period_executions.result_payload
+                    ),
+                    executed_at = excluded.executed_at
+            """, (date_str, period_key, action, payload_json, now_str))
 
             conn.commit()
             return True

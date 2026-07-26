@@ -458,7 +458,19 @@ class StorageBackend(ABC):
         """
         return False
 
-    def record_period_execution(self, date_str: str, period_key: str, action: str) -> bool:
+    def get_period_execution_payload(
+        self, date_str: str, period_key: str, action: str
+    ) -> Optional[Dict[str, Any]]:
+        """获取时间段 action 的持久化结果。"""
+        return None
+
+    def record_period_execution(
+        self,
+        date_str: str,
+        period_key: str,
+        action: str,
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         """
         记录时间段的 action 执行
 
@@ -466,6 +478,7 @@ class StorageBackend(ABC):
             date_str: 日期字符串 YYYY-MM-DD
             period_key: 时间段 key
             action: 动作类型 (analyze / push)
+            payload: action 结果（可选）
 
         Returns:
             是否记录成功

@@ -7,7 +7,7 @@ AI 分析器模块
 """
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from typing import Any, Callable, Dict, List, NamedTuple, Optional
 
 from trendradar.ai.client import AIClient
@@ -43,6 +43,26 @@ class AIAnalysisResult:
     ai_mode: str = ""                    # AI 分析使用的模式 (daily/current/incremental)
     include_rss: bool = True             # 是否启用 RSS 分析
     include_standalone: bool = False     # 是否启用独立展示区分析
+
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为可持久化字典。"""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AIAnalysisResult":
+        """从缓存字典恢复，忽略未来版本新增的未知字段。"""
+        if not isinstance(data, dict):
+            raise ValueError("AI 分析缓存必须是字典")
+        valid_fields = {item.name for item in fields(cls)}
+        values = {key: value for key, value in data.items() if key in valid_fields}
+        if "success" in values and not isinstance(values["success"], bool):
+            raise ValueError("AI 分析缓存 success 字段无效")
+        if (
+            "standalone_summaries" in values
+            and not isinstance(values["standalone_summaries"], dict)
+        ):
+            raise ValueError("AI 分析缓存 standalone_summaries 字段无效")
+        return cls(**values)
 
 
 class PreparedNewsContent(NamedTuple):

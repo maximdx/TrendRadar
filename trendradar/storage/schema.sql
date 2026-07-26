@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS period_executions (
     execution_date TEXT NOT NULL,          -- YYYY-MM-DD
     period_key TEXT NOT NULL,              -- period 的稳定 key
     action TEXT NOT NULL,                  -- analyze | push
+    result_payload TEXT,                   -- action 结果 JSON（AI 分析用于复用）
     executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(execution_date, period_key, action)
 );

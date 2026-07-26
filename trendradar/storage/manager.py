@@ -6,7 +6,7 @@
 """
 
 import os
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from trendradar.storage.base import StorageBackend, NewsData, RSSData
 from trendradar.utils.time import DEFAULT_TIMEZONE
@@ -285,9 +285,27 @@ class StorageManager:
         """检查指定时间段的某个 action 是否已执行"""
         return self.get_backend().has_period_executed(date_str, period_key, action)
 
-    def record_period_execution(self, date_str: str, period_key: str, action: str) -> bool:
+    def get_period_execution_payload(
+        self, date_str: str, period_key: str, action: str
+    ) -> Optional[Dict[str, Any]]:
+        """获取时间段 action 的持久化结果。"""
+        return self.get_backend().get_period_execution_payload(date_str, period_key, action)
+
+    def record_period_execution(
+        self,
+        date_str: str,
+        period_key: str,
+        action: str,
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         """记录时间段的 action 执行"""
-        return self.get_backend().record_period_execution(date_str, period_key, action)
+        if payload is None:
+            return self.get_backend().record_period_execution(
+                date_str, period_key, action
+            )
+        return self.get_backend().record_period_execution(
+            date_str, period_key, action, payload
+        )
 
     # === AI 智能筛选存储操作 ===
 

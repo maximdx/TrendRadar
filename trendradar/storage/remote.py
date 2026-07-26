@@ -423,9 +423,21 @@ class RemoteStorageBackend(SQLiteStorageMixin, StorageBackend):
         """检查指定时间段的某个 action 是否已执行"""
         return self._has_period_executed_impl(date_str, period_key, action)
 
-    def record_period_execution(self, date_str: str, period_key: str, action: str) -> bool:
+    def get_period_execution_payload(
+        self, date_str: str, period_key: str, action: str
+    ) -> Optional[Dict]:
+        """获取时间段 action 的持久化结果。"""
+        return self._get_period_execution_payload_impl(date_str, period_key, action)
+
+    def record_period_execution(
+        self,
+        date_str: str,
+        period_key: str,
+        action: str,
+        payload: Optional[Dict] = None,
+    ) -> bool:
         """记录时间段的 action 执行"""
-        success = self._record_period_execution_impl(date_str, period_key, action)
+        success = self._record_period_execution_impl(date_str, period_key, action, payload)
 
         if success:
             now_str = self._get_configured_time().strftime("%Y-%m-%d %H:%M:%S")
