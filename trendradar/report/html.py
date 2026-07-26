@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Callable
 
 import yaml
 
-from trendradar.report.helpers import html_escape
+from trendradar.report.helpers import html_escape, calculate_rank_trend
 from trendradar.utils.time import convert_time_for_display
 from trendradar.utils.time_display import (
     normalize_time_display_mode,
@@ -480,7 +480,7 @@ def render_html_content(
                 color: var(--text-primary);
                 font-size: 13px;
                 cursor: pointer;
-                border-radius: 5px;
+                border-radius: 6px;
                 text-align: left;
                 transition: background 0.15s;
                 white-space: nowrap;
@@ -873,6 +873,12 @@ def render_html_content(
 
             .rank-num.top { background: #dc2626; }
             .rank-num.high { background: #ea580c; }
+
+            .trend-up, .trend-down {
+                font-size: 12px;
+                margin-left: 2px;
+                vertical-align: middle;
+            }
 
             .time-info {
                 color: var(--text-secondary);
@@ -1437,6 +1443,16 @@ def render_html_content(
                 background: rgba(34, 197, 94, 0.22) !important;
                 color: #bbf7d0 !important;
             }
+
+            .ai-warning {
+                padding: 16px;
+                background: #fffbeb;
+                border: 1px solid #fde68a;
+                border-radius: 8px;
+                color: #92400e;
+                font-size: 14px;
+            }
+
             .ai-info {
                 padding: 16px;
                 background: #f0f9ff;
@@ -1486,8 +1502,23 @@ def render_html_content(
             body.wide-mode .standalone-group { margin-bottom: 0; }
 
             /* Tab 栏 */
-            .tab-bar {
+            .tab-bar-wrapper {
+                position: sticky;
+                top: 0;
+                z-index: 10;
+                background: white;
                 display: none;
+                margin-bottom: 20px;
+                align-items: stretch;
+                border-bottom: 2px solid #e5e7eb;
+            }
+            body.wide-mode .tab-bar-wrapper { display: flex; }
+            body.wide-mode .tab-bar-wrapper.tab-hidden { display: none; }
+
+            .tab-bar {
+                flex: 1;
+                min-width: 0;
+                display: flex;
                 overflow-x: auto;
                 white-space: nowrap;
                 padding: 8px 0 12px 0;
@@ -1500,9 +1531,52 @@ def render_html_content(
                 background: var(--surface-primary);
                 z-index: 10;
                 gap: 4px;
+                mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+                -webkit-mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
             }
-            body.wide-mode .tab-bar { display: flex; }
-            body.wide-mode .tab-bar.tab-hidden { display: none; }
+            .tab-bar::-webkit-scrollbar { display: none; }
+            .tab-bar.scroll-start {
+                mask-image: linear-gradient(to right, black, black calc(100% - 24px), transparent);
+                -webkit-mask-image: linear-gradient(to right, black, black calc(100% - 24px), transparent);
+            }
+            .tab-bar.scroll-end {
+                mask-image: linear-gradient(to right, transparent, black 24px, black);
+                -webkit-mask-image: linear-gradient(to right, transparent, black 24px, black);
+            }
+            .tab-bar.scroll-start.scroll-end,
+            .tab-bar.no-overflow {
+                mask-image: none;
+                -webkit-mask-image: none;
+            }
+
+            .tab-arrow {
+                flex-shrink: 0;
+                width: 28px;
+                display: none;
+                align-items: center;
+                justify-content: center;
+                background: none;
+                border: none;
+                color: #9ca3af;
+                font-size: 20px;
+                font-weight: 300;
+                cursor: pointer;
+                padding: 0;
+                transition: color 0.15s ease;
+            }
+            .tab-arrow:hover { color: #4f46e5; }
+            .tab-arrow.visible { display: flex; }
+
+            .tab-scroll-indicator {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                width: 0;
+                height: 2px;
+                background: #4f46e5;
+                border-radius: 0 1px 1px 0;
+                transition: width 0.1s linear;
+            }
 
             .tab-btn {
                 display: inline-flex;
@@ -1796,63 +1870,140 @@ def render_html_content(
                     <div class="save-buttons">
                         <button class="toggle-wide-btn" onclick="toggleWideMode()" title="切换宽屏/窄屏">⛶</button>
                         <div class="save-btn-group">
-                            <button class="save-btn" onclick="saveAsImage()">导出</button>
+                            <button class="save-btn" onclick="saveAsImage(event)">导出</button>
                             <button class="save-dropdown-trigger">▾</button>
                             <div class="save-dropdown-menu">
-                                <button class="save-dropdown-item" onclick="saveAsImage()"><svg class="dropdown-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><circle cx="8" cy="7.5" r="2.5"/><path d="M12 4h.01"/></svg>整页截图</button>
-                                <button class="save-dropdown-item" onclick="saveAsMultipleImages()"><svg class="dropdown-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="4" width="10" height="10" rx="1.5"/><path d="M5 4V2.5A1.5 1.5 0 016.5 1h7A1.5 1.5 0 0115 2.5v7a1.5 1.5 0 01-1.5 1.5H12"/></svg>分段截图</button>
+                                <button class="save-dropdown-item" onclick="saveAsImage(event)"><svg class="dropdown-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><circle cx="8" cy="7.5" r="2.5"/><path d="M12 4h.01"/></svg>整页截图</button>
+                                <button class="save-dropdown-item" onclick="saveAsMultipleImages(event)"><svg class="dropdown-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="4" width="10" height="10" rx="1.5"/><path d="M5 4V2.5A1.5 1.5 0 016.5 1h7A1.5 1.5 0 0115 2.5v7a1.5 1.5 0 01-1.5 1.5H12"/></svg>分段截图</button>
+                                <button class="save-dropdown-item" onclick="saveAsMarkdown()"><svg class="dropdown-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 2h11A1.5 1.5 0 0115 3.5v9a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 011 12.5v-9A1.5 1.5 0 012.5 2z"/><path d="M4 11V5l2.5 3L9 5v6"/><path d="M11.5 8v3m0 0l-1.5-2m1.5 2l1.5-2"/></svg>Markdown</button>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="header-title">热点新闻分析</div>
-                <div class="header-info">
-                    <div class="info-item">
-                        <span class="info-label">报告类型</span>
-                        <span class="info-value">"""
-
-    # 处理报告类型显示（根据 mode 直接显示）
-    if mode == "current":
-        html += "当前榜单"
-    elif mode == "incremental":
-        html += "增量分析"
-    else:
-        html += "全天汇总"
-
-    html += """</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">新闻总数</span>
-                        <span class="info-value">"""
-
-    html += f"{total_titles} 条"
-
-    # 计算筛选后的热点新闻数量
-    hot_news_count = sum(len(stat["titles"]) for stat in report_data["stats"])
-
-    html += """</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">热点新闻</span>
-                        <span class="info-value">"""
-
-    html += f"{hot_news_count} 条"
-
-    html += """</span>
-                    </div>
-                    <div class="info-item">
-                        <span class="info-label">生成时间</span>
-                        <span class="info-value">"""
+                <div class="header-info">"""
 
     # 使用提供的时间函数或默认 datetime.now
     if get_time_func:
         now = get_time_func()
     else:
         now = datetime.now()
-    html += now.strftime("%m-%d %H:%M")
 
-    html += """</span>
-                    </div>
+    # 处理报告类型显示
+    if mode == "current":
+        mode_display = "当前榜单"
+    elif mode == "incremental":
+        mode_display = "增量分析"
+    else:
+        mode_display = "全天汇总"
+
+    # 计算各项数据
+    hot_news_count = sum(len(stat["titles"]) for stat in report_data["stats"])
+    new_count = report_data.get("total_new_count", 0)
+
+    # 从元数据获取 RSS 和平台信息
+    hotlist_total = report_data.get("hotlist_total", total_titles)
+    platform_total = report_data.get("platform_total", 0)
+    failed_count = len(report_data.get("failed_ids", []))
+    platform_success = platform_total - failed_count if platform_total else 0
+    rss_matched = report_data.get("rss_matched_count", 0)
+    rss_total = report_data.get("rss_total_count", 0)
+    rss_source_total = report_data.get("rss_source_total", 0)
+    rss_source_failed = report_data.get("rss_source_failed", 0)
+    rss_source_success = max(0, rss_source_total - rss_source_failed)
+
+    # 1. 报告类型
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">报告类型</span>
+                        <span class="info-value">{mode_display}</span>
+                    </div>"""
+
+    # 2. 生成时间
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">生成时间</span>
+                        <span class="info-value">{now.strftime("%m-%d %H:%M")}</span>
+                    </div>"""
+
+    # 3. 热榜命中
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">热榜命中</span>
+                        <span class="info-value">{hot_news_count} / {hotlist_total}</span>
+                    </div>"""
+
+    # 4. RSS 命中
+    if rss_source_total > 0:
+        rss_value = f"{rss_matched} / {rss_total}"
+    else:
+        rss_value = "未启用"
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">RSS 命中</span>
+                        <span class="info-value">{rss_value}</span>
+                    </div>"""
+
+    # 5. 热榜平台
+    if platform_total > 0:
+        platform_value = f"{platform_success}/{platform_total}"
+    else:
+        platform_value = "--"
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">热榜平台</span>
+                        <span class="info-value">{platform_value}</span>
+                    </div>"""
+
+    # 6. RSS 源
+    if rss_source_total > 0:
+        rss_source_value = f"{rss_source_success}/{rss_source_total}"
+    else:
+        rss_source_value = "--"
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">RSS 源</span>
+                        <span class="info-value">{rss_source_value}</span>
+                    </div>"""
+
+    # 7. 新增热点（热榜新增 + RSS 新增）
+    rss_new_count = sum(len(stat.get("titles", [])) for stat in (rss_new_items or []))
+    total_new = new_count + rss_new_count
+    new_value = f"{new_count} + {rss_new_count}" if total_new > 0 else "0"
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">新增热点</span>
+                        <span class="info-value">{new_value}</span>
+                    </div>"""
+
+    # 8. AI 分析
+    if ai_analysis and getattr(ai_analysis, "success", False):
+        hotlist_analyzed = getattr(ai_analysis, "hotlist_analyzed", 0)
+        rss_analyzed = getattr(ai_analysis, "rss_analyzed", 0)
+        standalone_analyzed = getattr(ai_analysis, "standalone_analyzed", 0)
+        ai_include_rss = getattr(ai_analysis, "include_rss", True)
+        ai_include_standalone = getattr(ai_analysis, "include_standalone", False)
+
+        ai_parts = [str(hotlist_analyzed)]
+        if ai_include_rss:
+            ai_parts.append(str(rss_analyzed))
+        if ai_include_standalone:
+            ai_parts.append(str(standalone_analyzed))
+        ai_value = " + ".join(ai_parts) if sum(int(p) for p in ai_parts) > 0 else "0"
+    elif ai_analysis:
+        if getattr(ai_analysis, "skipped", False):
+            ai_value = "已跳过"
+        else:
+            ai_value = "待配置"
+    else:
+        ai_value = "未启用"
+    html += f"""
+                    <div class="info-item">
+                        <span class="info-label">AI 分析</span>
+                        <span class="info-value">{ai_value}</span>
+                    </div>"""
+
+    html += """
                 </div>
             </div>
 
@@ -1937,13 +2088,14 @@ def render_html_content(
         total_count = len(report_data["stats"])
 
         # 生成 Tab 栏 HTML
-        tab_bar_html = '<div class="tab-bar">'
+        total_news_count = sum(s["count"] for s in report_data["stats"])
+        tab_bar_html = '<div class="tab-bar-wrapper"><div class="tab-bar">'
+        tab_bar_html += f'<button class="tab-btn" data-tab-index="all">全部<span class="tab-count">{total_news_count}</span></button>'
         for tab_i, tab_stat in enumerate(report_data["stats"]):
             escaped_tab_word = html_escape(tab_stat["word"])
             tab_count = tab_stat["count"]
             tab_bar_html += f'<button class="tab-btn" data-tab-index="{tab_i}">{escaped_tab_word}<span class="tab-count">{tab_count}</span></button>'
-        tab_bar_html += '<button class="tab-btn" data-tab-index="all">全部</button>'
-        tab_bar_html += '</div>'
+        tab_bar_html += '</div></div>'
 
         for i, stat in enumerate(report_data["stats"], 1):
             count = stat["count"]
@@ -2013,7 +2165,16 @@ def render_html_content(
                     else:
                         rank_text = f"{min_rank}-{max_rank}"
 
-                    stats_html += f'<span class="rank-num {rank_class}">{rank_text}</span>'
+                    # 计算趋势箭头
+                    rank_timeline = title_data.get("rank_timeline", [])
+                    trend = calculate_rank_trend(rank_timeline, ranks)
+                    trend_html = ""
+                    if trend == "up":
+                        trend_html = '<span class="trend-up">📈</span>'
+                    elif trend == "down":
+                        trend_html = '<span class="trend-down">📉</span>'
+
+                    stats_html += f'<span class="rank-num {rank_class}">{rank_text}</span>{trend_html}'
 
                 # 趋势显示（基于最近两次有效排名）
                 rank_timeline = title_data.get("rank_timeline", [])
@@ -2615,18 +2776,76 @@ def render_html_content(
                 initStandaloneTabVisibility();
             }
 
+            function initTabScroll(tabBar) {
+                var wrapper = tabBar.closest('.tab-bar-wrapper') || tabBar.parentNode;
+                var leftArrow = wrapper.querySelector('.tab-arrow-left');
+                var rightArrow = wrapper.querySelector('.tab-arrow-right');
+                var indicator = wrapper.querySelector('.tab-scroll-indicator');
+                if (!leftArrow) {
+                    leftArrow = document.createElement('button');
+                    leftArrow.className = 'tab-arrow tab-arrow-left';
+                    leftArrow.innerHTML = '‹';
+                    rightArrow = document.createElement('button');
+                    rightArrow.className = 'tab-arrow tab-arrow-right';
+                    rightArrow.innerHTML = '›';
+                    indicator = document.createElement('div');
+                    indicator.className = 'tab-scroll-indicator';
+                    wrapper.insertBefore(leftArrow, tabBar);
+                    tabBar.after(rightArrow);
+                    wrapper.appendChild(indicator);
+                }
+                var scrollStep = 200;
+                leftArrow.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    tabBar.scrollBy({ left: -scrollStep, behavior: 'smooth' });
+                });
+                rightArrow.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    tabBar.scrollBy({ left: scrollStep, behavior: 'smooth' });
+                });
+                function updateArrows() {
+                    var sl = tabBar.scrollLeft;
+                    var sw = tabBar.scrollWidth;
+                    var cw = tabBar.clientWidth;
+                    var noOverflow = sw <= cw + 1;
+                    var atStart = sl <= 1;
+                    var atEnd = sl + cw >= sw - 1;
+                    leftArrow.classList.toggle('visible', !noOverflow && !atStart);
+                    rightArrow.classList.toggle('visible', !noOverflow && !atEnd);
+                    tabBar.classList.toggle('scroll-start', atStart);
+                    tabBar.classList.toggle('scroll-end', atEnd);
+                    tabBar.classList.toggle('no-overflow', noOverflow);
+                    var progress = noOverflow ? 0 : sl / (sw - cw);
+                    indicator.style.width = (progress * 100) + '%';
+                }
+                tabBar.addEventListener('scroll', updateArrows, { passive: true });
+                tabBar.addEventListener('wheel', function(e) {
+                    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                        tabBar.scrollLeft += e.deltaY;
+                        e.preventDefault();
+                    }
+                }, { passive: false });
+                updateArrows();
+                new ResizeObserver(updateArrows).observe(tabBar);
+            }
+
             function initTabs() {
-                var tabBar = document.querySelector('.tab-bar');
+                var wrapper = document.querySelector('.tab-bar-wrapper');
+                var tabBar = wrapper ? wrapper.querySelector('.tab-bar') : null;
                 if (!tabBar) return;
                 var tabs = tabBar.querySelectorAll('.tab-btn');
                 var groups = document.querySelectorAll('.word-group[data-tab-index]');
                 initTabVisibility();
+                initTabScroll(tabBar);
 
-                function activateTab(index) {
+                function activateTab(index, scroll) {
                     tabs.forEach(function(t) { t.classList.remove('active'); });
                     if (index === 'all') {
                         var allBtn = tabBar.querySelector('[data-tab-index="all"]');
-                        if (allBtn) allBtn.classList.add('active');
+                        if (allBtn) {
+                            allBtn.classList.add('active');
+                            if (scroll !== false) allBtn.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                        }
                         groups.forEach(function(g) { g.style.display = ''; });
                         try { history.replaceState(null, '', '#all'); } catch(e) {}
                         return;
@@ -2635,11 +2854,13 @@ def render_html_content(
                     tabs.forEach(function(t) {
                         if (parseInt(t.dataset.tabIndex) === idx) t.classList.add('active');
                     });
-                    if (document.body.classList.contains('wide-mode') && !tabBar.classList.contains('tab-hidden')) {
+                    if (document.body.classList.contains('wide-mode') && !wrapper.classList.contains('tab-hidden')) {
                         groups.forEach(function(g) {
                             g.style.display = (parseInt(g.dataset.tabIndex) === idx) ? '' : 'none';
                         });
                     }
+                    var activeBtn = tabBar.querySelector('.tab-btn.active');
+                    if (scroll !== false && activeBtn) activeBtn.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
                     try { history.replaceState(null, '', '#tab-' + idx); } catch(e) {}
                 }
 
@@ -2666,57 +2887,71 @@ def render_html_content(
                 var hash = window.location.hash;
                 if (hash === '#all') { activateTab('all'); }
                 else if (hash.indexOf('#tab-') === 0) { activateTab(parseInt(hash.replace('#tab-', ''))); }
-                else { activateTab(0); }
+                else { activateTab(0, false); }
             }
 
             function initTabVisibility() {
-                var tabBar = document.querySelector('.tab-bar');
-                if (!tabBar) return;
+                var wrapper = document.querySelector('.tab-bar-wrapper');
+                if (!wrapper) return;
+                var tabBar = wrapper.querySelector('.tab-bar');
                 var groups = document.querySelectorAll('.word-group[data-tab-index]');
                 var isWide = document.body.classList.contains('wide-mode');
                 if (!isWide || groups.length <= 2) {
-                    tabBar.classList.add('tab-hidden');
+                    wrapper.classList.add('tab-hidden');
                     groups.forEach(function(g) { g.style.display = ''; });
                 } else {
-                    tabBar.classList.remove('tab-hidden');
+                    wrapper.classList.remove('tab-hidden');
                     var activeTab = tabBar.querySelector('.tab-btn.active');
                     if (activeTab) { activeTab.click(); }
                     else {
-                        var firstTab = tabBar.querySelector('.tab-btn');
+                        var firstTab = tabBar.querySelector('.tab-btn[data-tab-index="0"]');
                         if (firstTab) firstTab.click();
                     }
                 }
             }
 
-            function handleSearch(query) {
-                query = query.toLowerCase().trim();
-                document.querySelectorAll('.news-item').forEach(function(item) {
-                    var title = (item.querySelector('.news-title') || {}).textContent || '';
-                    var source = item.getAttribute('data-search-source') || '';
-                    var haystack = (title + ' ' + source).toLowerCase();
-                    item.style.display = (!query || haystack.indexOf(query) !== -1) ? '' : 'none';
-                });
-                document.querySelectorAll('.rss-item').forEach(function(item) {
-                    var title = (item.querySelector('.rss-title') || {}).textContent || '';
-                    var source = item.getAttribute('data-search-source') || '';
-                    var haystack = (title + ' ' + source).toLowerCase();
-                    item.style.display = (!query || haystack.indexOf(query) !== -1) ? '' : 'none';
-                });
-            }
+            var handleSearch = (function() {
+                var timer = null;
+                return function(query) {
+                    clearTimeout(timer);
+                    timer = setTimeout(function() {
+                        query = query.toLowerCase().trim();
+                        document.querySelectorAll('.news-item').forEach(function(item) {
+                            var title = (item.querySelector('.news-title') || {}).textContent || '';
+                            var source = item.getAttribute('data-search-source') || '';
+                            var haystack = (title + ' ' + source).toLowerCase();
+                            item.style.display = (!query || haystack.indexOf(query) !== -1) ? '' : 'none';
+                        });
+                        document.querySelectorAll('.rss-item').forEach(function(item) {
+                            var title = (item.querySelector('.rss-title') || {}).textContent || '';
+                            var source = item.getAttribute('data-search-source') || '';
+                            var haystack = (title + ' ' + source).toLowerCase();
+                            item.style.display = (!query || haystack.indexOf(query) !== -1) ? '' : 'none';
+                        });
+                    }, 200);
+                };
+            })();
 
             function initBackToTop() {
                 var fabBar = document.querySelector('.fab-bar');
                 if (!fabBar) return;
+                var ticking = false;
                 window.addEventListener('scroll', function() {
-                    fabBar.classList.toggle('visible', window.scrollY > 300);
+                    if (!ticking) {
+                        requestAnimationFrame(function() {
+                            fabBar.classList.toggle('visible', window.scrollY > 300);
+                            ticking = false;
+                        });
+                        ticking = true;
+                    }
                 });
             }
 
             function initCollapse() {
                 document.querySelectorAll('.word-header').forEach(function(header) {
                     header.addEventListener('click', function() {
-                        var tabBar = document.querySelector('.tab-bar');
-                        if (document.body.classList.contains('wide-mode') && tabBar && !tabBar.classList.contains('tab-hidden')) return;
+                        var wrapper = document.querySelector('.tab-bar-wrapper');
+                        if (document.body.classList.contains('wide-mode') && wrapper && !wrapper.classList.contains('tab-hidden')) return;
                         var group = header.closest('.word-group');
                         if (group) group.classList.toggle('collapsed');
                     });
@@ -2726,8 +2961,8 @@ def render_html_content(
 
             function initCollapseVisibility() {
                 var headers = document.querySelectorAll('.word-header');
-                var tabBar = document.querySelector('.tab-bar');
-                var isTabMode = document.body.classList.contains('wide-mode') && tabBar && !tabBar.classList.contains('tab-hidden');
+                var wrapper = document.querySelector('.tab-bar-wrapper');
+                var isTabMode = document.body.classList.contains('wide-mode') && wrapper && !wrapper.classList.contains('tab-hidden');
                 headers.forEach(function(h) {
                     if (isTabMode) { h.classList.remove('collapsible'); }
                     else { h.classList.add('collapsible'); }
@@ -2745,6 +2980,7 @@ def render_html_content(
                 if (!tabBar) return;
                 var groups = document.querySelectorAll('.standalone-group[data-standalone-tab]');
                 var btns = tabBar.querySelectorAll('.tab-btn[data-standalone-tab]');
+                initTabScroll(tabBar);
 
                 function activateStandaloneTab(val) {
                     btns.forEach(function(b) {
@@ -2802,7 +3038,7 @@ def render_html_content(
                         g.style.display = '';
                     }
                 });
-                document.querySelectorAll('.tab-bar, .standalone-tab-bar, .search-bar, .fab-bar, .toggle-wide-btn').forEach(function(el) {
+                document.querySelectorAll('.tab-bar-wrapper, .standalone-tab-bar, .search-bar, .fab-bar, .toggle-wide-btn').forEach(function(el) {
                     el.dataset.prevDisplay = el.style.display || '';
                     el.style.display = 'none';
                 });
@@ -2823,7 +3059,7 @@ def render_html_content(
                         if (standaloneGroups[i]) standaloneGroups[i].style.display = 'none';
                     });
                 }
-                document.querySelectorAll('.tab-bar, .standalone-tab-bar, .search-bar, .fab-bar, .toggle-wide-btn').forEach(function(el) {
+                document.querySelectorAll('.tab-bar-wrapper, .standalone-tab-bar, .search-bar, .fab-bar, .toggle-wide-btn').forEach(function(el) {
                     el.style.display = el.dataset.prevDisplay || '';
                     delete el.dataset.prevDisplay;
                 });
@@ -3096,11 +3332,13 @@ def render_html_content(
             }
 
             function initTabs() {
-                var tabBar = document.querySelector('.tab-bar');
+                var wrapper = document.querySelector('.tab-bar-wrapper');
+                var tabBar = wrapper ? wrapper.querySelector('.tab-bar') : null;
                 if (!tabBar) return;
                 var tabs = tabBar.querySelectorAll('.tab-btn');
                 var groups = document.querySelectorAll('.word-group[data-tab-index]');
                 initTabVisibility();
+                initTabScroll(tabBar);
 
                 function activateTab(index) {
                     tabs.forEach(function(t) { t.classList.remove('active'); });
@@ -3115,7 +3353,7 @@ def render_html_content(
                     tabs.forEach(function(t) {
                         if (parseInt(t.dataset.tabIndex) === idx) t.classList.add('active');
                     });
-                    if (document.body.classList.contains('wide-mode') && !tabBar.classList.contains('tab-hidden')) {
+                    if (document.body.classList.contains('wide-mode') && !wrapper.classList.contains('tab-hidden')) {
                         groups.forEach(function(g) {
                             g.style.display = (parseInt(g.dataset.tabIndex) === idx) ? '' : 'none';
                         });
@@ -3150,53 +3388,45 @@ def render_html_content(
             }
 
             function initTabVisibility() {
-                var tabBar = document.querySelector('.tab-bar');
-                if (!tabBar) return;
+                var wrapper = document.querySelector('.tab-bar-wrapper');
+                if (!wrapper) return;
+                var tabBar = wrapper.querySelector('.tab-bar');
                 var groups = document.querySelectorAll('.word-group[data-tab-index]');
                 var isWide = document.body.classList.contains('wide-mode');
                 if (!isWide || groups.length <= 2) {
-                    tabBar.classList.add('tab-hidden');
+                    wrapper.classList.add('tab-hidden');
                     groups.forEach(function(g) { g.style.display = ''; });
                 } else {
-                    tabBar.classList.remove('tab-hidden');
+                    wrapper.classList.remove('tab-hidden');
                     var activeTab = tabBar.querySelector('.tab-btn.active');
                     if (activeTab) { activeTab.click(); }
                     else {
-                        var firstTab = tabBar.querySelector('.tab-btn');
+                        var firstTab = tabBar.querySelector('.tab-btn[data-tab-index="0"]');
                         if (firstTab) firstTab.click();
                     }
                 }
             }
 
-            function handleSearch(query) {
-                query = query.toLowerCase().trim();
-                document.querySelectorAll('.news-item').forEach(function(item) {
-                    var title = (item.querySelector('.news-title') || {}).textContent || '';
-                    var source = item.getAttribute('data-search-source') || '';
-                    var haystack = (title + ' ' + source).toLowerCase();
-                    item.style.display = (!query || haystack.indexOf(query) !== -1) ? '' : 'none';
-                });
-                document.querySelectorAll('.rss-item').forEach(function(item) {
-                    var title = (item.querySelector('.rss-title') || {}).textContent || '';
-                    var source = item.getAttribute('data-search-source') || '';
-                    var haystack = (title + ' ' + source).toLowerCase();
-                    item.style.display = (!query || haystack.indexOf(query) !== -1) ? '' : 'none';
-                });
-            }
-
             function initBackToTop() {
                 var fabBar = document.querySelector('.fab-bar');
                 if (!fabBar) return;
+                var ticking = false;
                 window.addEventListener('scroll', function() {
-                    fabBar.classList.toggle('visible', window.scrollY > 300);
+                    if (!ticking) {
+                        requestAnimationFrame(function() {
+                            fabBar.classList.toggle('visible', window.scrollY > 300);
+                            ticking = false;
+                        });
+                        ticking = true;
+                    }
                 });
             }
 
             function initCollapse() {
                 document.querySelectorAll('.word-header').forEach(function(header) {
                     header.addEventListener('click', function() {
-                        var tabBar = document.querySelector('.tab-bar');
-                        if (document.body.classList.contains('wide-mode') && tabBar && !tabBar.classList.contains('tab-hidden')) return;
+                        var wrapper = document.querySelector('.tab-bar-wrapper');
+                        if (document.body.classList.contains('wide-mode') && wrapper && !wrapper.classList.contains('tab-hidden')) return;
                         var group = header.closest('.word-group');
                         if (group) group.classList.toggle('collapsed');
                     });
@@ -3206,8 +3436,8 @@ def render_html_content(
 
             function initCollapseVisibility() {
                 var headers = document.querySelectorAll('.word-header');
-                var tabBar = document.querySelector('.tab-bar');
-                var isTabMode = document.body.classList.contains('wide-mode') && tabBar && !tabBar.classList.contains('tab-hidden');
+                var wrapper = document.querySelector('.tab-bar-wrapper');
+                var isTabMode = document.body.classList.contains('wide-mode') && wrapper && !wrapper.classList.contains('tab-hidden');
                 headers.forEach(function(h) {
                     if (isTabMode) { h.classList.remove('collapsible'); }
                     else { h.classList.add('collapsible'); }
@@ -3223,6 +3453,7 @@ def render_html_content(
             function initStandaloneTabs() {
                 var tabBar = document.querySelector('.standalone-tab-bar');
                 if (!tabBar) return;
+                initTabScroll(tabBar);
                 var groups = document.querySelectorAll('.standalone-group[data-standalone-tab]');
                 var btns = tabBar.querySelectorAll('.tab-btn[data-standalone-tab]');
 
@@ -3282,7 +3513,7 @@ def render_html_content(
                         g.style.display = '';
                     }
                 });
-                document.querySelectorAll('.tab-bar, .standalone-tab-bar, .search-bar, .fab-bar, .toggle-wide-btn').forEach(function(el) {
+                document.querySelectorAll('.tab-bar-wrapper, .standalone-tab-bar, .search-bar, .fab-bar, .toggle-wide-btn').forEach(function(el) {
                     el.dataset.prevDisplay = el.style.display || '';
                     el.style.display = 'none';
                 });
@@ -3303,11 +3534,10 @@ def render_html_content(
                         if (standaloneGroups[i]) standaloneGroups[i].style.display = 'none';
                     });
                 }
-                document.querySelectorAll('.tab-bar, .standalone-tab-bar, .search-bar, .fab-bar, .toggle-wide-btn').forEach(function(el) {
+                document.querySelectorAll('.tab-bar-wrapper, .standalone-tab-bar, .search-bar, .fab-bar, .toggle-wide-btn').forEach(function(el) {
                     el.style.display = el.dataset.prevDisplay || '';
                     delete el.dataset.prevDisplay;
                 });
-                document.querySelectorAll('.reading-progress').forEach(function(el) { el.style.display = ''; });
                 document.querySelectorAll('.reading-progress').forEach(function(el) { el.style.display = ''; });
                 document.querySelectorAll('.header-watermark').forEach(function(el) { el.style.display = ''; });
                 initTabVisibility();
@@ -3318,9 +3548,10 @@ def render_html_content(
             }
 
             // ===== 截图功能 =====
-            async function saveAsImage() {
-                const button = event.target;
-                const originalText = button.textContent;
+            async function saveAsImage(e) {
+                const button = e.target.closest('.save-dropdown-item') || e.target;
+                const originalHTML = button.innerHTML;
+                var screenshotState = null;
                 const foldStateSnapshot = getFoldStateSnapshot();
                 setAllFoldState(false);
 
@@ -3333,7 +3564,7 @@ def render_html_content(
                     await new Promise(resolve => setTimeout(resolve, 200));
 
                     // 截图前准备：切回窄屏布局
-                    var screenshotState = prepareForScreenshot();
+                    screenshotState = prepareForScreenshot();
 
                     // 截图前隐藏按钮
                     const buttons = document.querySelector('.save-buttons');
@@ -3395,7 +3626,7 @@ def render_html_content(
 
                     button.textContent = '保存成功!';
                     setTimeout(() => {
-                        button.textContent = originalText;
+                        button.innerHTML = originalHTML;
                         button.disabled = false;
                     }, 2000);
 
@@ -3406,10 +3637,10 @@ def render_html_content(
                     if (outlinePanel) {
                         outlinePanel.style.visibility = 'visible';
                     }
-                    restoreAfterScreenshot(screenshotState);
+                    if (screenshotState) { restoreAfterScreenshot(screenshotState); }
                     button.textContent = '保存失败';
                     setTimeout(() => {
-                        button.textContent = originalText;
+                        button.innerHTML = originalHTML;
                         button.disabled = false;
                     }, 2000);
                 } finally {
@@ -3417,19 +3648,20 @@ def render_html_content(
                 }
             }
 
-            async function saveAsMultipleImages() {
-                const button = event.target;
-                const originalText = button.textContent;
+            async function saveAsMultipleImages(e) {
+                const button = e.target.closest('.save-dropdown-item') || e.target;
+                const originalHTML = button.innerHTML;
                 const container = document.querySelector('.container');
                 const scale = 1.5;
                 const maxHeight = 5000 / scale;
-                var screenshotState2 = prepareForScreenshot();
+                var screenshotState2 = null;
                 const foldStateSnapshot = getFoldStateSnapshot();
                 const headerToolbar = document.querySelector('.header-toolbar');
                 const captureBackground = getComputedStyle(container).backgroundColor || '#ffffff';
                 setAllFoldState(false);
 
                 try {
+                    screenshotState2 = prepareForScreenshot();
                     button.textContent = '分析中...';
                     button.disabled = true;
 
@@ -3655,7 +3887,7 @@ def render_html_content(
                     button.textContent = `已保存 ${segments.length} 张图片!`;
                     restoreAfterScreenshot(screenshotState2);
                     setTimeout(() => {
-                        button.textContent = originalText;
+                        button.innerHTML = originalHTML;
                         button.disabled = false;
                     }, 2000);
 
@@ -3671,15 +3903,239 @@ def render_html_content(
                     if (outlinePanel) {
                         outlinePanel.style.visibility = 'visible';
                     }
-                    restoreAfterScreenshot(screenshotState2);
+                    if (screenshotState2) { restoreAfterScreenshot(screenshotState2); }
                     button.textContent = '保存失败';
                     setTimeout(() => {
-                        button.textContent = originalText;
+                        button.innerHTML = originalHTML;
                         button.disabled = false;
                     }, 2000);
                 } finally {
                     restoreFoldStateSnapshot(foldStateSnapshot);
                 }
+            }
+
+            function saveAsMarkdown() {
+                var lines = [];
+                var now = new Date();
+                var dateStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+                var timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+
+                // 标题
+                var headerTitle = document.querySelector('.header-title');
+                lines.push('# ' + (headerTitle ? headerTitle.textContent.trim() : 'TrendRadar'));
+                lines.push('');
+
+                // 报告元信息
+                var infoItems = document.querySelectorAll('.header-info .info-item');
+                if (infoItems.length) {
+                    infoItems.forEach(function(item) {
+                        var label = item.querySelector('.info-label');
+                        var value = item.querySelector('.info-value');
+                        if (label && value) {
+                            lines.push('- **' + label.textContent.trim() + '**: ' + value.textContent.trim());
+                        }
+                    });
+                    lines.push('');
+                }
+
+                // 提取 news-item 通用函数
+                function extractItem(item, idx) {
+                    var titleEl = item.querySelector('.news-title a');
+                    var titleText = '';
+                    var url = '';
+                    if (titleEl) {
+                        titleText = titleEl.textContent.trim();
+                        url = titleEl.href || '';
+                    } else {
+                        var titleDiv = item.querySelector('.news-title') || item.querySelector('.new-item-title');
+                        if (titleDiv) titleText = titleDiv.textContent.trim();
+                    }
+                    if (!titleText) return '';
+
+                    var meta = [];
+                    var rank = item.querySelector('.rank-num, .new-item-rank');
+                    if (rank && rank.textContent.trim() && rank.textContent.trim() !== '?') meta.push('#' + rank.textContent.trim());
+                    var source = item.querySelector('.source-name');
+                    if (source) meta.push(source.textContent.trim());
+                    var keyword = item.querySelector('.keyword-tag');
+                    if (keyword) meta.push(keyword.textContent.trim());
+                    var time = item.querySelector('.time-info');
+                    if (time) meta.push(time.textContent.trim());
+                    var count = item.querySelector('.count-info');
+                    if (count) meta.push(count.textContent.trim());
+
+                    var line = idx + '. ';
+                    if (url) {
+                        line += '[' + titleText.replace(/[[\\]]/g, '') + '](' + url + ')';
+                    } else {
+                        line += titleText;
+                    }
+                    if (meta.length) line += '  `' + meta.join(' | ') + '`';
+                    return line;
+                }
+
+                // 热点关键词区
+                var wordGroups = document.querySelectorAll('.hotlist-section > .word-group');
+                if (wordGroups.length) {
+                    lines.push('## 热点新闻');
+                    lines.push('');
+                    wordGroups.forEach(function(group) {
+                        var wordName = group.querySelector('.word-name');
+                        var wordCount = group.querySelector('.word-count');
+                        if (wordName) {
+                            lines.push('### ' + wordName.textContent.trim() + (wordCount ? ' (' + wordCount.textContent.trim() + ')' : ''));
+                            lines.push('');
+                        }
+                        var items = group.querySelectorAll('.news-item');
+                        items.forEach(function(item, i) {
+                            var line = extractItem(item, i + 1);
+                            if (line) lines.push(line);
+                        });
+                        lines.push('');
+                    });
+                }
+
+                // 新增热点区
+                var newSection = document.querySelector('.new-section');
+                if (newSection) {
+                    var newTitle = newSection.querySelector('.new-section-title');
+                    lines.push('## ' + (newTitle ? newTitle.textContent.trim() : '本次新增热点'));
+                    lines.push('');
+                    var sourceGroups = newSection.querySelectorAll('.new-source-group');
+                    sourceGroups.forEach(function(sg) {
+                        var srcTitle = sg.querySelector('.new-source-title');
+                        if (srcTitle) {
+                            lines.push('### ' + srcTitle.textContent.trim());
+                            lines.push('');
+                        }
+                        var items = sg.querySelectorAll('.new-item');
+                        items.forEach(function(item, i) {
+                            var line = extractItem(item, i + 1);
+                            if (line) lines.push(line);
+                        });
+                        lines.push('');
+                    });
+                }
+
+                // RSS 订阅更新区
+                var rssSection = document.querySelector('.rss-section');
+                if (rssSection) {
+                    var rssSectionTitle = rssSection.querySelector('.rss-section-title');
+                    lines.push('## ' + (rssSectionTitle ? rssSectionTitle.textContent.trim() : 'RSS 订阅更新'));
+                    lines.push('');
+                    var feedGroups = rssSection.querySelectorAll('.feed-group');
+                    feedGroups.forEach(function(group) {
+                        var feedName = group.querySelector('.feed-name');
+                        var feedCount = group.querySelector('.feed-count');
+                        if (feedName) {
+                            lines.push('### ' + feedName.textContent.trim() + (feedCount ? ' (' + feedCount.textContent.trim() + ')' : ''));
+                            lines.push('');
+                        }
+                        var items = group.querySelectorAll('.rss-item');
+                        items.forEach(function(item, i) {
+                            var titleEl = item.querySelector('.rss-title a');
+                            var titleText = titleEl ? titleEl.textContent.trim() : '';
+                            var url = titleEl ? (titleEl.href || '') : '';
+                            if (!titleText) return;
+                            var meta = [];
+                            var time = item.querySelector('.rss-time');
+                            if (time) meta.push(time.textContent.trim());
+                            var author = item.querySelector('.rss-author');
+                            if (author) meta.push(author.textContent.trim());
+                            var line = (i + 1) + '. ';
+                            if (url) { line += '[' + titleText.replace(/[\\[\\]]/g, '') + '](' + url + ')'; }
+                            else { line += titleText; }
+                            if (meta.length) line += '  `' + meta.join(' | ') + '`';
+                            lines.push(line);
+                        });
+                        lines.push('');
+                    });
+                }
+
+                // AI 热点分析区
+                var aiSection = document.querySelector('.ai-section');
+                if (aiSection) {
+                    var aiError = aiSection.querySelector('.ai-error') || aiSection.querySelector('.ai-warning');
+                    var aiInfo = aiSection.querySelector('.ai-info');
+                    if (aiError) {
+                        lines.push('## AI 分析');
+                        lines.push('');
+                        lines.push('> ' + aiError.textContent.trim());
+                        lines.push('');
+                    } else if (aiInfo) {
+                        // 跳过 info 提示（如"跳过"）
+                    } else {
+                        var aiTitle = aiSection.querySelector('.ai-section-title');
+                        lines.push('## ' + (aiTitle ? aiTitle.textContent.trim() : 'AI 热点分析'));
+                        lines.push('');
+                        var aiBlocks = aiSection.querySelectorAll('.ai-block');
+                        aiBlocks.forEach(function(block) {
+                            var blockTitle = block.querySelector('.ai-block-title');
+                            var blockContent = block.querySelector('.ai-block-content');
+                            if (blockTitle) {
+                                lines.push('### ' + blockTitle.textContent.trim());
+                                lines.push('');
+                            }
+                            if (blockContent) {
+                                lines.push(blockContent.textContent.trim());
+                                lines.push('');
+                            }
+                        });
+                    }
+                }
+
+                // 独立展示区（热榜平台 + RSS）
+                var standaloneSection = document.querySelector('.standalone-section');
+                if (standaloneSection) {
+                    var standaloneTitle = standaloneSection.querySelector('.standalone-section-title');
+                    lines.push('## ' + (standaloneTitle ? standaloneTitle.textContent.trim() : '独立展示区'));
+                    lines.push('');
+                    var groups = standaloneSection.querySelectorAll('.standalone-group');
+                    groups.forEach(function(group) {
+                        var name = group.querySelector('.standalone-name');
+                        var cnt = group.querySelector('.standalone-count');
+                        if (name) {
+                            lines.push('### ' + name.textContent.trim() + (cnt ? ' (' + cnt.textContent.trim() + ')' : ''));
+                            lines.push('');
+                        }
+                        var items = group.querySelectorAll('.news-item');
+                        items.forEach(function(item, i) {
+                            var line = extractItem(item, i + 1);
+                            if (line) lines.push(line);
+                        });
+                        lines.push('');
+                    });
+                }
+
+                // 错误区
+                var errorSection = document.querySelector('.error-section');
+                if (errorSection) {
+                    var errorItems = errorSection.querySelectorAll('.error-item');
+                    if (errorItems.length) {
+                        lines.push('## 抓取异常');
+                        lines.push('');
+                        errorItems.forEach(function(item) {
+                            lines.push('- ' + item.textContent.trim());
+                        });
+                        lines.push('');
+                    }
+                }
+
+                // 页脚
+                lines.push('---');
+                lines.push('*Generated by TrendRadar*');
+
+                // 下载
+                var md = lines.join('\\n');
+                var blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+                var link = document.createElement('a');
+                var filename = 'TrendRadar_' + dateStr + '_' + timeStr.replace(':', '') + '.md';
+                link.download = filename;
+                link.href = URL.createObjectURL(blob);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
             }
 
             document.addEventListener('DOMContentLoaded', function() {
@@ -3728,9 +4184,16 @@ def render_html_content(
                 // 阅读进度条
                 var progressBar = document.querySelector('.reading-progress');
                 if (progressBar) {
+                    var progressTicking = false;
                     window.addEventListener('scroll', function() {
-                        var h = document.documentElement.scrollHeight - window.innerHeight;
-                        progressBar.style.width = (h > 0 ? (window.scrollY / h * 100) : 0) + '%';
+                        if (!progressTicking) {
+                            requestAnimationFrame(function() {
+                                var h = document.documentElement.scrollHeight - window.innerHeight;
+                                progressBar.style.width = (h > 0 ? (window.scrollY / h * 100) : 0) + '%';
+                                progressTicking = false;
+                            });
+                            progressTicking = true;
+                        }
                     });
                 }
 
@@ -3747,14 +4210,28 @@ def render_html_content(
                     numEl.addEventListener('click', function(e) {
                         e.stopPropagation();
                         var text = titleEl.textContent.trim() + ' ' + titleEl.href;
-                        navigator.clipboard.writeText(text).then(function() {
+                        function onCopySuccess() {
                             numEl.classList.add('copied');
                             numEl.querySelector('.copy-icon').innerHTML = checkSvg;
                             setTimeout(function() {
                                 numEl.classList.remove('copied');
                                 numEl.querySelector('.copy-icon').innerHTML = copySvg;
                             }, 1500);
-                        });
+                        }
+                        function fallbackCopy(str, cb) {
+                            var ta = document.createElement('textarea');
+                            ta.value = str; ta.style.position = 'fixed'; ta.style.opacity = '0';
+                            document.body.appendChild(ta); ta.select();
+                            try { document.execCommand('copy'); cb(); } catch(ex) {}
+                            document.body.removeChild(ta);
+                        }
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(text).then(onCopySuccess).catch(function() {
+                                fallbackCopy(text, onCopySuccess);
+                            });
+                        } else {
+                            fallbackCopy(text, onCopySuccess);
+                        }
                     });
                 });
 
