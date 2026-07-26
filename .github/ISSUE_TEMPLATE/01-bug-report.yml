@@ -63,7 +63,7 @@ body:
       description: |
         如果是 AI 分析相关问题，请提供你使用的具体模型名称。
         AI 问题与模型能力密切相关，不同模型表现差异很大。
-      placeholder: "例如：deepseek/deepseek-chat、openai/gpt-4o、gemini/gemini-2.5-flash"
+      placeholder: "例如：deepseek/deepseek-v4-flash、openai/gpt-4o、gemini/gemini-2.5-flash"
     validations:
       required: false
 
