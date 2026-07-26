@@ -30,6 +30,7 @@ class AIAnalysisResult:
     success: bool = False                # 是否成功
     skipped: bool = False                # 是否因无内容跳过（非失败）
     error: str = ""                      # 错误信息
+    model: str = ""                      # 生成此结果的模型
 
     # 新闻数量统计
     total_news: int = 0                  # 总新闻数（热榜+RSS）

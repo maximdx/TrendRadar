@@ -38,7 +38,7 @@ class FakeContext:
                 "ENABLED": True,
                 "MODE": "follow_report",
             },
-            "AI": {},
+            "AI": {"MODEL": "deepseek/deepseek-v4-pro"},
             "DEBUG": False,
         }
 
@@ -161,6 +161,34 @@ class AIAnalysisCacheTest(unittest.TestCase):
         self.assertEqual(analyzer_class.call_count, 1)
         self.assertEqual(result.core_trends, "修复损坏缓存")
         self.assertEqual(scheduler.payload["standalone_summaries"], {})
+
+    def test_model_change_reanalyzes_and_replaces_cache(self):
+        cached = AIAnalysisResult(
+            core_trends="Flash 总结",
+            success=True,
+            model="deepseek/deepseek-v4-flash",
+        )
+        scheduler = FakeScheduler(executed=True, payload=cached.to_dict())
+        analyzer = make_analyzer(scheduler)
+        expected = AIAnalysisResult(core_trends="Pro 总结", success=True)
+
+        with patch("trendradar.__main__.AIAnalyzer") as analyzer_class:
+            analyzer_class.return_value.analyze.return_value = expected
+            result = analyzer._run_ai_analysis(
+                stats=[{"word": "AI", "count": 1, "titles": []}],
+                rss_items=[],
+                mode="daily",
+                report_type="当日汇总",
+                id_to_name={"zhihu": "知乎"},
+                schedule=make_schedule(),
+            )
+
+        self.assertEqual(analyzer_class.call_count, 1)
+        self.assertEqual(result.core_trends, "Pro 总结")
+        self.assertEqual(result.model, "deepseek/deepseek-v4-pro")
+        self.assertEqual(
+            scheduler.payload["model"], "deepseek/deepseek-v4-pro"
+        )
 
     def test_result_round_trip_ignores_unknown_fields(self):
         original = AIAnalysisResult(

@@ -318,6 +318,7 @@ class NewsAnalyzer:
         analysis_config = self.ctx.config.get("AI_ANALYSIS", {})
         if not analysis_config.get("ENABLED", False):
             return None
+        current_model = self.ctx.config.get("AI", {}).get("MODEL", "")
 
         # 调度系统决策
         if not schedule.analyze:
@@ -334,13 +335,22 @@ class NewsAnalyzer:
                 if payload:
                     try:
                         cached_result = AIAnalysisResult.from_dict(payload)
-                        if cached_result.success is True:
+                        if (
+                            cached_result.success is True
+                            and cached_result.model == current_model
+                        ):
                             print(
                                 f"[AI] 调度器: 时间段 "
                                 f"{schedule.period_name or schedule.period_key} "
                                 "今天已分析过，复用缓存结果"
                             )
                             return cached_result
+                        if cached_result.success is True:
+                            print(
+                                f"[AI] 缓存模型已变化: "
+                                f"{cached_result.model or '未知'} -> "
+                                f"{current_model or '未知'}"
+                            )
                     except (TypeError, ValueError) as e:
                         print(f"[AI] 缓存结果无效，将重新分析: {e}")
                 print(
@@ -428,6 +438,7 @@ class NewsAnalyzer:
             # 设置 AI 分析使用的模式
             if result.success:
                 result.ai_mode = ai_mode
+                result.model = current_model
                 if result.error:
                     # 成功但有警告（如 JSON 解析问题但使用了原始文本）
                     print(f"[AI] 分析完成（有警告: {result.error}）")

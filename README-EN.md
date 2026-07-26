@@ -322,7 +322,7 @@ This contributes to the sustainable maintenance of the project and the growth of
   - `AI_PROVIDER` environment variable → Removed
   - `AI_BASE_URL` environment variable → `AI_API_BASE`
 - **Model Format Examples**:
-  - DeepSeek: `deepseek/deepseek-v4-flash`
+  - DeepSeek: `deepseek/deepseek-v4-pro`
   - OpenAI: `openai/gpt-4o`
   - Gemini: `gemini/gemini-2.5-flash`
   - Anthropic: `anthropic/claude-3-5-sonnet`
@@ -3448,13 +3448,13 @@ The simplest way is via environment variables (Recommended for GitHub Secrets or
 |--------------|-------|-------------|
 | `AI_ANALYSIS_ENABLED` | `true` | Enable switch |
 | `AI_API_KEY` | `sk-xxxxxx` | Your API Key |
-| `AI_MODEL` | `deepseek/deepseek-v4-flash` | Model identifier (format: `provider/model`) |
+| `AI_MODEL` | `deepseek/deepseek-v4-pro` | Model identifier (format: `provider/model`) |
 
 **Supported AI Providers** (Based on LiteLLM, supports 100+ providers):
 
 | Provider | AI_MODEL Value | Description |
 |----------|----------------|-------------|
-| **DeepSeek** (Recommended) | `deepseek/deepseek-v4-flash` | Excellent cost-performance ratio for high-frequency analysis |
+| **DeepSeek** (Recommended) | `deepseek/deepseek-v4-pro` | Higher-quality analysis for complex summaries |
 | **OpenAI** | `openai/gpt-4o`<br>`openai/gpt-4o-mini` | GPT-4o series |
 | **Google Gemini** | `gemini/gemini-1.5-flash`<br>`gemini/gemini-1.5-pro` | Gemini series |
 | **Custom API** | Any format | Use with `AI_API_BASE` |

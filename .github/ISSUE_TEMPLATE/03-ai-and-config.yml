@@ -54,7 +54,7 @@ body:
         请提供你使用的具体模型名称。
         AI 分析效果与模型能力密切相关，不同模型表现差异很大。
         分享提示词时也请注明，方便其他用户参考。
-      placeholder: "例如：deepseek/deepseek-v4-flash、openai/gpt-4o、gemini/gemini-2.5-flash"
+      placeholder: "例如：deepseek/deepseek-v4-pro、openai/gpt-4o、gemini/gemini-2.5-flash"
     validations:
       required: false
 
