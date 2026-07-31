@@ -34,7 +34,7 @@ class AIClient:
         self.api_key = config.get("API_KEY") or os.environ.get("AI_API_KEY", "")
         self.api_base = config.get("API_BASE", "")
         self.temperature = config.get("TEMPERATURE", 1.0)
-        self.max_tokens = config.get("MAX_TOKENS", 5000)
+        self.max_tokens = config.get("MAX_TOKENS", 10000)
         self.timeout = config.get("TIMEOUT", 120)
         self.num_retries = config.get("NUM_RETRIES", 2)
         self.fallback_models = config.get("FALLBACK_MODELS", [])

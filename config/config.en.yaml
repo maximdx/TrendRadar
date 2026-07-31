@@ -392,7 +392,7 @@ ai:
   temperature: 1.0                  # Sampling temperature (0.0-2.0)
                                     # Note: some models (e.g. gpt-5) may require exactly 1.0, or they error
 
-  max_tokens: 5000                  # Max generated tokens
+  max_tokens: 10000                 # Max generated tokens (reasoning models need thinking-token headroom)
                                     # Note: if the API rejects this param (HTTP 400), set to 0 to stop sending it
   # Advanced options
   num_retries: 1                    # Retry count on failure

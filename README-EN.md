@@ -3467,7 +3467,7 @@ The simplest way is via environment variables (Recommended for GitHub Secrets or
 |--------------|---------|-------------|
 | `AI_API_BASE` | (auto) | Custom API endpoint (e.g., OneAPI, local models) |
 | `AI_TEMPERATURE` | `1.0` | Sampling temperature (0-2, higher = more random) |
-| `AI_MAX_TOKENS` | `5000` | Maximum tokens to generate |
+| `AI_MAX_TOKENS` | `10000` | Maximum tokens to generate (includes reasoning tokens) |
 | `AI_TIMEOUT` | `120` | Request timeout (seconds) |
 | `AI_NUM_RETRIES` | `2` | Number of retries on failure |
 
