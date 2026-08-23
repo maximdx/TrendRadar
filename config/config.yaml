@@ -95,6 +95,7 @@ platforms:
       name: "雪球热门股票"
     - id: "36kr-quick"
       name: "36氪快讯"
+      enabled: false  # NewsNow 当前持续返回 500，待上游恢复后再启用
     - id: "ithome"
       name: "IT之家"
     - id: "v2ex-share"

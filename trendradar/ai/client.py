@@ -15,6 +15,8 @@ from litellm import completion
 class AIClient:
     """统一的 AI 客户端（基于 LiteLLM）"""
 
+    EMPTY_RESPONSE_RETRY_MAX_TOKENS = 20000
+
     def __init__(self, config: Dict[str, Any]):
         """
         初始化 AI 客户端
@@ -88,18 +90,53 @@ class AIClient:
             if key not in params:
                 params[key] = value
 
-        # 调用 LiteLLM
+        # 调用 LiteLLM。推理模型可能在 max_tokens 内耗尽思考预算，
+        # 最终只返回空 content；这种情况扩大一次预算通常即可恢复正文。
         response = completion(**params)
+        content = self._extract_content(response)
+        if content.strip():
+            return content
 
-        # 提取响应内容
-        # 某些模型/提供商返回 list（内容块）而非 str，统一转为 str
-        content = response.choices[0].message.content
+        base_max_tokens = max_tokens if isinstance(max_tokens, (int, float)) else 0
+        retry_max_tokens = min(
+            base_max_tokens * 2 if base_max_tokens > 0 else 0,
+            self.EMPTY_RESPONSE_RETRY_MAX_TOKENS,
+        )
+        if retry_max_tokens > base_max_tokens:
+            params["max_tokens"] = retry_max_tokens
+            response = completion(**params)
+            content = self._extract_content(response)
+            if content.strip():
+                return content
+
+        finish_reason = self._extract_finish_reason(response)
+        detail = f"，finish_reason={finish_reason}" if finish_reason else ""
+        raise RuntimeError(
+            f"AI 返回空响应{detail}；模型可能耗尽了推理 token，请降低分析内容量或提高 max_tokens"
+        )
+
+    @staticmethod
+    def _extract_content(response: Any) -> str:
+        """提取模型最终正文，不把 reasoning content 当作分析结果。"""
+        choice = response.choices[0]
+        message = choice.message
+        content = message.get("content") if isinstance(message, dict) else message.content
+
+        # 某些模型/提供商返回 list（内容块）而非 str，统一转为 str。
         if isinstance(content, list):
             content = "\n".join(
                 item.get("text", str(item)) if isinstance(item, dict) else str(item)
                 for item in content
             )
-        return content or ""
+        return content if isinstance(content, str) else str(content or "")
+
+    @staticmethod
+    def _extract_finish_reason(response: Any) -> str:
+        """读取响应结束原因，便于诊断空正文。"""
+        choice = response.choices[0]
+        if isinstance(choice, dict):
+            return str(choice.get("finish_reason") or "")
+        return str(getattr(choice, "finish_reason", "") or "")
 
     def validate_config(self) -> tuple[bool, str]:
         """
